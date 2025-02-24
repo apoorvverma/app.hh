@@ -8,6 +8,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StarIcon, DollarSignIcon } from "lucide-react"
 
+declare global {
+  interface Window {
+    google: typeof google
+  }
+}
+
 interface Driver {
   id: string
   name: string
