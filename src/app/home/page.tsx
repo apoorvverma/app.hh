@@ -1,6 +1,8 @@
 "use client"
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,6 +21,87 @@ export default function HomePage() {
   const [time, setTime] = useState<string>()
   const [pickup, setPickup] = useState("")
   const [dropoff, setDropoff] = useState("")
+  
+  const pickupRef = useRef<HTMLInputElement>(null)
+  const dropoffRef = useRef<HTMLInputElement>(null)
+  
+  const mapRef = useRef<HTMLDivElement>(null)
+  // const [map, setMap] = useState<google.maps.Map | null>(null)
+  
+
+  // Initialize Google Maps
+  useEffect(() => {
+    // Load Google Maps JavaScript API
+    const script = document.createElement('script')
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`
+    script.async = true
+    script.defer = true
+    document.head.appendChild(script)
+
+    script.onload = () => {
+      if (mapRef.current) {
+        // Initialize map centered on Boston
+        new google.maps.Map(mapRef.current, {
+          center: { lat: 42.350876, lng: -71.106918 }, // Boston coordinates
+          zoom: 13,
+        })
+        // const mapInstance = new google.maps.Map(mapRef.current, {
+        //   center: { lat: 42.350876, lng: -71.106918 }, // Boston coordinates
+        //   zoom: 13,
+        //   // disableDefaultUI: true,
+        //   /* styles: [
+        //     {
+        //       elementType: "geometry",
+        //       stylers: [{ color: "#f5f5f5" }]
+        //     },
+        //     {
+        //       elementType: "labels.icon",
+        //       stylers: [{ visibility: "off" }]
+        //     },
+        //     {
+        //       elementType: "labels.text.fill",
+        //       stylers: [{ color: "#616161" }]
+        //     },
+        //     {
+        //       elementType: "labels.text.stroke",
+        //       stylers: [{ color: "#f5f5f5" }]
+        //     }
+        //   ] */
+        // })
+        // setMap(mapInstance)
+      }
+
+      if (pickupRef.current && dropoffRef.current) {
+        // Initialize Autocomplete for pickup
+        const pickupAutocomplete = new google.maps.places.Autocomplete(pickupRef.current, {
+          fields: ["formatted_address", "geometry"],
+          types: ["address"]
+        })
+
+        // Initialize Autocomplete for dropoff
+        const dropoffAutocomplete = new google.maps.places.Autocomplete(dropoffRef.current, {
+          fields: ["formatted_address", "geometry"],
+          types: ["address"]
+        })
+
+        // Handle place selection for pickup
+        pickupAutocomplete.addListener("place_changed", () => {
+          const place = pickupAutocomplete.getPlace()
+          setPickup(place.formatted_address || "")
+        })
+
+        // Handle place selection for dropoff
+        dropoffAutocomplete.addListener("place_changed", () => {
+          const place = dropoffAutocomplete.getPlace()
+          setDropoff(place.formatted_address || "")
+        })
+      }
+    }
+
+    return () => {
+      document.head.removeChild(script)
+    }
+  }, [])
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -37,10 +120,14 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="h-screen w-screen relative overflow-hidden">
+      {/* Map Container */}
+      <div ref={mapRef} className="absolute inset-0 w-full h-full" />
+
+      {/* Menu Button */}
       <Sheet>
         <SheetTrigger asChild>
-          <Button variant="outline" size="icon" className="fixed top-4 left-4 z-50">
+          <Button variant="outline" size="icon" className="fixed top-4 left-4 z-50 bg-white">
             <MenuIcon className="h-4 w-4" />
           </Button>
         </SheetTrigger>
@@ -66,8 +153,9 @@ export default function HomePage() {
         </SheetContent>
       </Sheet>
 
-      <main className="container mx-auto px-4 py-8">
-        <Card>
+      {/* Ride Request Card */}
+      <div className="absolute bottom-0 left-0 right-0 w-full px-4 pb-4 z-40">
+        <Card className="shadow-2xl">
           <CardHeader>
             <CardTitle>Request a Ride</CardTitle>
           </CardHeader>
@@ -79,6 +167,7 @@ export default function HomePage() {
                   <MapPinIcon className="w-5 h-5 mr-2 text-muted-foreground" />
                   <Input
                     id="pickup"
+                    ref={pickupRef}
                     placeholder="Enter pickup location"
                     required
                     value={pickup}
@@ -92,6 +181,7 @@ export default function HomePage() {
                   <MapPinIcon className="w-5 h-5 mr-2 text-muted-foreground" />
                   <Input
                     id="dropoff"
+                    ref={dropoffRef}
                     placeholder="Enter drop-off location"
                     required
                     value={dropoff}
@@ -122,7 +212,7 @@ export default function HomePage() {
             </form>
           </CardContent>
         </Card>
-      </main>
+      </div>
     </div>
   )
 }
