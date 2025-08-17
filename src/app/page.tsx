@@ -3,103 +3,96 @@
 import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
-import { ChromeIcon as Google } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { useRouter } from "next/navigation"
 
-export default function AuthPage() {
-  const [isSignUp, setIsSignUp] = useState(false)
-  const router = useRouter()
+export default function WelcomeSignup() {
+  const [role, setRole] = useState<"rider" | "driver" | null>(null);
+  const [displayName, setDisplayName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    // Handle form submission
-    console.log("Form submitted")
-    if (isSignUp) {
-      router.push("/auth/profile-setup")
+  function generateUserId() {
+    return "u" + Math.floor(1000 + Math.random() * 9000);
+  }
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!role || !displayName.trim()) {
+      setError("Please select a role and enter your display name.");
+      return;
     }
-  }
-
-  const handleGoogleSignIn = () => {
-    // Handle Google sign-in
-    console.log("Google sign-in clicked")
-  }
+    setLoading(true);
+    const userId = generateUserId();
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, displayName, role })
+      });
+      if (!res.ok) throw new Error("Registration failed");
+      // Open socket connection and store user data
+      if (typeof window !== "undefined") {
+        const { createSocket } = await import("@/utils/socket");
+        createSocket(userId, role);
+        localStorage.setItem("userId", userId);
+        localStorage.setItem("role", role);
+        localStorage.setItem("displayName", displayName);
+        window.location.href = "/map";
+      }
+    } catch (err: any) {
+      setError(err.message || "Registration error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <Card className="w-[350px]">
         <CardHeader>
-          <CardTitle>{isSignUp ? "Create an account" : "Sign in to your account"}</CardTitle>
-          <CardDescription>
-            {isSignUp ? "Enter your details to create your account" : "Enter your credentials to access your account"}
-          </CardDescription>
+          <CardTitle>Welcome to Hitchiked, do you want to</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {isSignUp && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name</Label>
-                  <Input id="firstName" type="text" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name</Label>
-                  <Input id="lastName" type="text" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="retypeEmail">Retype Email</Label>
-                  <Input id="retypeEmail" type="email" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input id="password" type="password" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirm Password</Label>
-                  <Input id="confirmPassword" type="password" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                  <Input id="dateOfBirth" type="date" required />
-                </div>
-              </>
-            )}
-            {!isSignUp && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input id="password" type="password" required />
-                </div>
-              </>
-            )}
-            <Button type="submit" className="w-full">
-              {isSignUp ? "Sign Up" : "Sign In"}
+          <form className="space-y-4" onSubmit={handleRegister}>
+            <div className="flex gap-4 mb-2">
+              <Button
+                type="button"
+                variant={role === "rider" ? "default" : "outline"}
+                onClick={() => setRole("rider")}
+                className="flex-1"
+              >
+                ride today
+              </Button>
+              <Button
+                type="button"
+                variant={role === "driver" ? "default" : "outline"}
+                onClick={() => setRole("driver")}
+                className="flex-1"
+              >
+                drive today
+              </Button>
+            </div>
+            <Label htmlFor="displayName">Display Name</Label>
+            <Input
+              id="displayName"
+              value={displayName}
+              onChange={e => setDisplayName(e.target.value)}
+              placeholder="Enter your name"
+              required
+            />
+            {error && <div className="text-red-500 text-sm">{error}</div>}
+            {success && <div className="text-green-600 text-sm">Registered successfully!</div>}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Registering..." : "Continue"}
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex flex-col items-center space-y-2">
-          <Button variant="link" onClick={() => setIsSignUp(!isSignUp)} className="text-sm text-muted-foreground">
-            {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
-          </Button>
-          <Link href="/forgot-password" className="text-sm text-muted-foreground hover:underline">
-            Forgot your password?
-          </Link>
-          <Button onClick={handleGoogleSignIn} variant="outline" className="w-full mt-4">
-            <Google className="w-5 h-5 mr-2" />
-            Sign in with Google
-          </Button>
-        </CardFooter>
       </Card>
     </div>
-  )
+  );
 }

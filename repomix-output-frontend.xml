@@ -1,0 +1,3314 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.gitignore
+components.json
+eslint.config.mjs
+next.config.ts
+package.json
+postcss.config.js
+postcss.config.mjs
+public/file.svg
+public/globe.svg
+public/next.svg
+public/vercel.svg
+public/window.svg
+README.md
+src/app/addresses/page.tsx
+src/app/auth/payment-setup/page.tsx
+src/app/auth/profile-setup/page.tsx
+src/app/available-drivers/availableDriversPage.tsx
+src/app/available-drivers/page.tsx
+src/app/driver-details/[id]/page.tsx
+src/app/globals.css
+src/app/home/page.tsx
+src/app/layout.tsx
+src/app/map/page.tsx
+src/app/map/socket-map-helpers.ts
+src/app/page.tsx
+src/app/payment-methods/page.tsx
+src/app/profile/page.tsx
+src/app/ride-confirmation/[id]/page.tsx
+src/app/ride-confirmation/[id]/rideconfirmation.tsx
+src/app/ride-history/page.tsx
+src/components/ui/avatar.tsx
+src/components/ui/button.tsx
+src/components/ui/calendar.tsx
+src/components/ui/card.tsx
+src/components/ui/dialog.tsx
+src/components/ui/input.tsx
+src/components/ui/label.tsx
+src/components/ui/place-autocomplete.tsx
+src/components/ui/popover.tsx
+src/components/ui/radio-group.tsx
+src/components/ui/sheet.tsx
+src/components/ui/socket-status-card.tsx
+src/components/ui/tabs.tsx
+src/components/ui/textarea.tsx
+src/components/ui/time-picker.tsx
+src/lib/utils.ts
+src/utils/socket.ts
+tailwind.config.js
+tailwind.config.ts
+tsconfig.json
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="src/app/map/socket-map-helpers.ts">
+import { Socket } from "socket.io-client";
+
+export interface UserLocation {
+  userId: string;
+  lat: number;
+  lng: number;
+}
+
+export function emitLocationUpdate(socket: Socket, lat: number, lng: number) {
+  socket.emit("location:update", { lat, lng });
+}
+
+export function registerUser(socket: Socket, userId: string, role: "driver" | "rider", lat: number, lng: number) {
+  socket.emit("user:register", { userId, role, lat, lng });
+}
+</file>
+
+<file path="src/components/ui/place-autocomplete.tsx">
+import React, { useEffect, useRef, useState } from "react";
+import { Input } from "@/components/ui/input";
+
+export interface PlaceAutocompleteProps {
+  value: string;
+  onChange: (value: string) => void;
+  onSelect: (place: { description: string; place_id: string; lat?: number; lng?: number }) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+}
+
+const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+export const PlaceAutocomplete: React.FC<PlaceAutocompleteProps> = ({
+  value,
+  onChange,
+  onSelect,
+  placeholder,
+  disabled,
+  className,
+}) => {
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [active, setActive] = useState(-1);
+  const controller = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!value || !GOOGLE_MAPS_API_KEY) {
+      setSuggestions([]);
+      return;
+    }
+    setLoading(true);
+    if (controller.current) controller.current.abort();
+    controller.current = new AbortController();
+    const fetchSuggestions = async () => {
+      try {
+        const res = await fetch(
+          `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
+            value
+          )}&key=${GOOGLE_MAPS_API_KEY}&types=geocode&language=en&components=&strictbounds=false`,
+          { signal: controller.current?.signal }
+        );
+        const data = await res.json();
+        setSuggestions(data.predictions || []);
+      } catch (e) {
+        setSuggestions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSuggestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const handleSelect = async (suggestion: any) => {
+    onSelect(suggestion);
+    setSuggestions([]);
+  };
+
+  return (
+    <div className="relative">
+      <Input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        className={className}
+        autoComplete="off"
+      />
+      {suggestions.length > 0 && (
+        <ul className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded shadow-lg max-h-56 overflow-auto">
+          {suggestions.map((s, idx) => (
+            <li
+              key={s.place_id}
+              className={`px-3 py-2 cursor-pointer hover:bg-gray-100 ${idx === active ? "bg-gray-100" : ""}`}
+              onMouseDown={() => handleSelect(s)}
+              onMouseEnter={() => setActive(idx)}
+            >
+              {s.description}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+</file>
+
+<file path="src/components/ui/socket-status-card.tsx">
+import * as React from "react";
+import { Card } from "@/components/ui/card";
+
+export interface SocketStatusCardProps {
+  status: "connected" | "connecting" | "disconnected";
+  details?: string;
+  userId?: string;
+}
+
+export const SocketStatusCard: React.FC<SocketStatusCardProps> = ({ status, details, userId }) => {
+  let color = "bg-gray-400";
+  if (status === "connected") color = "bg-green-500";
+  else if (status === "connecting") color = "bg-yellow-500";
+  else if (status === "disconnected") color = "bg-red-500";
+
+  return (
+    <Card className="fixed top-4 right-4 z-50 w-56 p-3 shadow-lg border-2 border-muted bg-background/95 flex flex-col items-start space-y-1">
+      <div className="flex items-center space-x-2">
+        <span className={`inline-block h-3 w-3 rounded-full ${color}`}></span>
+        <span className="text-sm font-semibold capitalize">{status}</span>
+      </div>
+      {userId && <div className="text-xs text-muted-foreground truncate">User: {userId}</div>}
+      {details && <div className="text-xs text-muted-foreground truncate">{details}</div>}
+    </Card>
+  );
+};
+</file>
+
+<file path="src/components/ui/time-picker.tsx">
+import * as React from "react";
+import { cn } from "@/lib/utils";
+
+export interface TimePickerProps {
+  value?: string; // format: "HH:mm"
+  onChange?: (value: string) => void;
+  label?: string;
+  disabled?: boolean;
+  className?: string;
+}
+
+const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, "0"));
+const minutes = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, "0"));
+
+export const TimePicker = React.forwardRef<HTMLDivElement, TimePickerProps>(
+  ({ value = "", onChange, label, disabled, className, ...props }, ref) => {
+    const [open, setOpen] = React.useState(false);
+    const [hour, setHour] = React.useState<string>(value.split(":")[0] || "");
+    const [minute, setMinute] = React.useState<string>(value.split(":")[1] || "");
+
+    React.useEffect(() => {
+      if (hour && minute) {
+        onChange && onChange(`${hour}:${minute}`);
+      }
+    }, [hour, minute]);
+
+    React.useEffect(() => {
+      if (value) {
+        setHour(value.split(":")[0] || "");
+        setMinute(value.split(":")[1] || "");
+      }
+    }, [value]);
+
+    return (
+      <div className={cn("relative flex flex-col", className)} ref={ref} {...props}>
+        {label && <label className="mb-1 text-sm font-medium text-muted-foreground">{label}</label>}
+        <button
+          type="button"
+          className={cn(
+            "flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+            disabled && "opacity-50 cursor-not-allowed"
+          )}
+          onClick={() => setOpen((o) => !o)}
+          disabled={disabled}
+        >
+          {hour && minute ? `${hour}:${minute}` : <span className="text-muted-foreground">Select time</span>}
+          <svg className="ml-2 h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+        </button>
+        {open && !disabled && (
+          <div className="absolute z-10 mt-2 flex w-full rounded-md border bg-popover p-2 shadow-lg">
+            <select
+              className="mr-2 flex-1 rounded-md border px-2 py-1 text-base focus:outline-none"
+              value={hour}
+              onChange={(e) => setHour(e.target.value)}
+            >
+              <option value="">HH</option>
+              {hours.map((h) => (
+                <option key={h} value={h}>{h}</option>
+              ))}
+            </select>
+            <span className="mx-1 self-center text-base font-semibold text-muted-foreground">:</span>
+            <select
+              className="flex-1 rounded-md border px-2 py-1 text-base focus:outline-none"
+              value={minute}
+              onChange={(e) => setMinute(e.target.value)}
+            >
+              <option value="">MM</option>
+              {minutes.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+            <button
+              className="ml-2 rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              onClick={() => setOpen(false)}
+              type="button"
+            >
+              OK
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+);
+TimePicker.displayName = "TimePicker";
+</file>
+
+<file path="src/utils/socket.ts">
+import { io, Socket } from "socket.io-client";
+
+export function createSocket(userId: string, role: "rider" | "driver"): Socket {
+  return io("http://localhost:4000", {
+    query: { userId, role }
+  });
+}
+</file>
+
+<file path=".gitignore">
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+</file>
+
+<file path="components.json">
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "new-york",
+  "rsc": true,
+  "tsx": true,
+  "tailwind": {
+    "config": "tailwind.config.js",
+    "css": "src/app/globals.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "aliases": {
+    "components": "@/components",
+    "utils": "@/lib/utils",
+    "ui": "@/components/ui",
+    "lib": "@/lib",
+    "hooks": "@/hooks"
+  },
+  "iconLibrary": "lucide"
+}
+</file>
+
+<file path="eslint.config.mjs">
+import { dirname } from "path";
+import { fileURLToPath } from "url";
+import { FlatCompat } from "@eslint/eslintrc";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const compat = new FlatCompat({
+  baseDirectory: __dirname,
+});
+
+const eslintConfig = [
+  ...compat.extends("next/core-web-vitals", "next/typescript"),
+];
+
+export default eslintConfig;
+</file>
+
+<file path="next.config.ts">
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  /* config options here */
+};
+
+export default nextConfig;
+</file>
+
+<file path="postcss.config.js">
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+</file>
+
+<file path="postcss.config.mjs">
+/** @type {import('postcss-load-config').Config} */
+const config = {
+  plugins: {
+    tailwindcss: {},
+  },
+};
+
+export default config;
+</file>
+
+<file path="public/file.svg">
+<svg fill="none" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M14.5 13.5V5.41a1 1 0 0 0-.3-.7L9.8.29A1 1 0 0 0 9.08 0H1.5v13.5A2.5 2.5 0 0 0 4 16h8a2.5 2.5 0 0 0 2.5-2.5m-1.5 0v-7H8v-5H3v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1M9.5 5V2.12L12.38 5zM5.13 5h-.62v1.25h2.12V5zm-.62 3h7.12v1.25H4.5zm.62 3h-.62v1.25h7.12V11z" clip-rule="evenodd" fill="#666" fill-rule="evenodd"/></svg>
+</file>
+
+<file path="public/globe.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><g clip-path="url(#a)"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.27 14.1a6.5 6.5 0 0 0 3.67-3.45q-1.24.21-2.7.34-.31 1.83-.97 3.1M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m.48-1.52a7 7 0 0 1-.96 0H7.5a4 4 0 0 1-.84-1.32q-.38-.89-.63-2.08a40 40 0 0 0 3.92 0q-.25 1.2-.63 2.08a4 4 0 0 1-.84 1.31zm2.94-4.76q1.66-.15 2.95-.43a7 7 0 0 0 0-2.58q-1.3-.27-2.95-.43a18 18 0 0 1 0 3.44m-1.27-3.54a17 17 0 0 1 0 3.64 39 39 0 0 1-4.3 0 17 17 0 0 1 0-3.64 39 39 0 0 1 4.3 0m1.1-1.17q1.45.13 2.69.34a6.5 6.5 0 0 0-3.67-3.44q.65 1.26.98 3.1M8.48 1.5l.01.02q.41.37.84 1.31.38.89.63 2.08a40 40 0 0 0-3.92 0q.25-1.2.63-2.08a4 4 0 0 1 .85-1.32 7 7 0 0 1 .96 0m-2.75.4a6.5 6.5 0 0 0-3.67 3.44 29 29 0 0 1 2.7-.34q.31-1.83.97-3.1M4.58 6.28q-1.66.16-2.95.43a7 7 0 0 0 0 2.58q1.3.27 2.95.43a18 18 0 0 1 0-3.44m.17 4.71q-1.45-.12-2.69-.34a6.5 6.5 0 0 0 3.67 3.44q-.65-1.27-.98-3.1" fill="#666"/></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h16v16H0z"/></clipPath></defs></svg>
+</file>
+
+<file path="public/next.svg">
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 394 80"><path fill="#000" d="M262 0h68.5v12.7h-27.2v66.6h-13.6V12.7H262V0ZM149 0v12.7H94v20.4h44.3v12.6H94v21h55v12.6H80.5V0h68.7zm34.3 0h-17.8l63.8 79.4h17.9l-32-39.7 32-39.6h-17.9l-23 28.6-23-28.6zm18.3 56.7-9-11-27.1 33.7h17.8l18.3-22.7z"/><path fill="#000" d="M81 79.3 17 0H0v79.3h13.6V17l50.2 62.3H81Zm252.6-.4c-1 0-1.8-.4-2.5-1s-1.1-1.6-1.1-2.6.3-1.8 1-2.5 1.6-1 2.6-1 1.8.3 2.5 1a3.4 3.4 0 0 1 .6 4.3 3.7 3.7 0 0 1-3 1.8zm23.2-33.5h6v23.3c0 2.1-.4 4-1.3 5.5a9.1 9.1 0 0 1-3.8 3.5c-1.6.8-3.5 1.3-5.7 1.3-2 0-3.7-.4-5.3-1s-2.8-1.8-3.7-3.2c-.9-1.3-1.4-3-1.4-5h6c.1.8.3 1.6.7 2.2s1 1.2 1.6 1.5c.7.4 1.5.5 2.4.5 1 0 1.8-.2 2.4-.6a4 4 0 0 0 1.6-1.8c.3-.8.5-1.8.5-3V45.5zm30.9 9.1a4.4 4.4 0 0 0-2-3.3 7.5 7.5 0 0 0-4.3-1.1c-1.3 0-2.4.2-3.3.5-.9.4-1.6 1-2 1.6a3.5 3.5 0 0 0-.3 4c.3.5.7.9 1.3 1.2l1.8 1 2 .5 3.2.8c1.3.3 2.5.7 3.7 1.2a13 13 0 0 1 3.2 1.8 8.1 8.1 0 0 1 3 6.5c0 2-.5 3.7-1.5 5.1a10 10 0 0 1-4.4 3.5c-1.8.8-4.1 1.2-6.8 1.2-2.6 0-4.9-.4-6.8-1.2-2-.8-3.4-2-4.5-3.5a10 10 0 0 1-1.7-5.6h6a5 5 0 0 0 3.5 4.6c1 .4 2.2.6 3.4.6 1.3 0 2.5-.2 3.5-.6 1-.4 1.8-1 2.4-1.7a4 4 0 0 0 .8-2.4c0-.9-.2-1.6-.7-2.2a11 11 0 0 0-2.1-1.4l-3.2-1-3.8-1c-2.8-.7-5-1.7-6.6-3.2a7.2 7.2 0 0 1-2.4-5.7 8 8 0 0 1 1.7-5 10 10 0 0 1 4.3-3.5c2-.8 4-1.2 6.4-1.2 2.3 0 4.4.4 6.2 1.2 1.8.8 3.2 2 4.3 3.4 1 1.4 1.5 3 1.5 5h-5.8z"/></svg>
+</file>
+
+<file path="public/vercel.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1155 1000"><path d="m577.3 0 577.4 1000H0z" fill="#fff"/></svg>
+</file>
+
+<file path="public/window.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill-rule="evenodd" clip-rule="evenodd" d="M1.5 2.5h13v10a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM0 1h16v11.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 0 12.5zm3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5M7 4.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0m1.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5" fill="#666"/></svg>
+</file>
+
+<file path="README.md">
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+
+## Getting Started
+
+First, run the development server:
+
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Learn More
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+</file>
+
+<file path="src/app/addresses/page.tsx">
+"use client"
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { PlusCircleIcon, HomeIcon, BriefcaseIcon } from "lucide-react"
+
+export default function AddressesPage() {
+  const router = useRouter()
+  const [addresses, setAddresses] = useState([
+    { id: 1, label: "Home", address: "123 Home St, City, Country" },
+    { id: 2, label: "Work", address: "456 Work Ave, City, Country" },
+  ])
+  const [newLabel, setNewLabel] = useState("")
+  const [newAddress, setNewAddress] = useState("")
+
+  const handleAddAddress = () => {
+    if (newLabel && newAddress) {
+      setAddresses([...addresses, { id: Date.now(), label: newLabel, address: newAddress }])
+      setNewLabel("")
+      setNewAddress("")
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-8">
+      <Card className="max-w-3xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold">My Addresses</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {addresses.map((address) => (
+              <div key={address.id} className="flex items-center space-x-2 bg-white p-4 rounded shadow">
+                {address.label === "Home" ? (
+                  <HomeIcon className="h-5 w-5 text-gray-500" />
+                ) : address.label === "Work" ? (
+                  <BriefcaseIcon className="h-5 w-5 text-gray-500" />
+                ) : (
+                  <div className="h-5 w-5 rounded-full bg-gray-300" />
+                )}
+                <div>
+                  <p className="font-semibold">{address.label}</p>
+                  <p className="text-gray-500">{address.address}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 space-y-4">
+            <h3 className="text-lg font-semibold">Add New Address</h3>
+            <div className="space-y-2">
+              <Label htmlFor="newLabel">Label</Label>
+              <Input
+                id="newLabel"
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder="e.g. Gym, School"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newAddress">Address</Label>
+              <Input
+                id="newAddress"
+                value={newAddress}
+                onChange={(e) => setNewAddress(e.target.value)}
+                placeholder="Enter full address"
+              />
+            </div>
+            <Button onClick={handleAddAddress} className="w-full">
+              <PlusCircleIcon className="h-4 w-4 mr-2" />
+              Add Address
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+      <Button className="mt-4" onClick={() => router.push("/home")}>
+        Back to Home
+      </Button>
+    </div>
+  )
+}
+</file>
+
+<file path="src/app/payment-methods/page.tsx">
+"use client"
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
+import { CreditCardIcon, PlusCircleIcon } from "lucide-react"
+
+export default function PaymentMethodsPage() {
+  const router = useRouter()
+  const [paymentMethods, setPaymentMethods] = useState([
+    { id: 1, type: "Visa", last4: "1234", primary: true },
+    { id: 2, type: "Mastercard", last4: "5678", primary: false },
+  ])
+
+  const handleSetPrimary = (id: number) => {
+    setPaymentMethods(
+      paymentMethods.map((method) => ({
+        ...method,
+        primary: method.id === id,
+      })),
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-8">
+      <Card className="max-w-3xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold">Payment Methods</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RadioGroup defaultValue={paymentMethods.find((m) => m.primary)?.id.toString()}>
+            {paymentMethods.map((method) => (
+              <div key={method.id} className="flex items-center space-x-2 bg-white p-4 rounded shadow mb-4">
+                <RadioGroupItem value={method.id.toString()} id={`method-${method.id}`} />
+                <Label htmlFor={`method-${method.id}`} className="flex items-center space-x-2 cursor-pointer">
+                  <CreditCardIcon className="h-5 w-5" />
+                  <span>
+                    {method.type} ending in {method.last4}
+                  </span>
+                  {method.primary && <span className="text-green-600 text-sm">(Primary)</span>}
+                </Label>
+                <Button variant="ghost" size="sm" onClick={() => handleSetPrimary(method.id)} disabled={method.primary}>
+                  Set as Primary
+                </Button>
+              </div>
+            ))}
+          </RadioGroup>
+          <Button className="w-full mt-4">
+            <PlusCircleIcon className="h-4 w-4 mr-2" />
+            Add New Payment Method
+          </Button>
+        </CardContent>
+      </Card>
+      <Button className="mt-4" onClick={() => router.push("/home")}>
+        Back to Home
+      </Button>
+    </div>
+  )
+}
+</file>
+
+<file path="src/app/ride-confirmation/[id]/rideconfirmation.tsx">
+"use client"
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
+
+
+import { useState, useEffect, useMemo } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { MapPinIcon, CarIcon, DollarSignIcon, UserIcon, ClockIcon } from "lucide-react"
+
+interface RideDetails {
+  driverName: string
+  pickupTime: string
+  dropoffLocation: string
+  pickupLocation: string
+  carNumberplate: string
+  carModel: string
+  fare: number
+}
+
+export default function RideConfirmationPage() {
+  const router = useRouter()
+  // const params = useParams()
+  const searchParams = useSearchParams()
+  const [rideDetails, setRideDetails] = useState<RideDetails | null>(null)
+
+  const fareFromParams = useMemo(() => Number.parseFloat(searchParams.get("fare") || "15.50"), [searchParams])
+
+  useEffect(() => {
+    // In a real app, you would fetch this data from an API
+    const newRideDetails = {
+      driverName: "John Doe",
+      pickupTime: "2023-05-20T14:30:00",
+      dropoffLocation: "456 Elm St, City",
+      pickupLocation: "123 Main St, City",
+      carNumberplate: "ABC 123",
+      carModel: "Toyota Camry",
+      fare: fareFromParams,
+    }
+
+    // Only update state if the new details are different from the current state
+    setRideDetails((prevDetails) =>
+      JSON.stringify(prevDetails) !== JSON.stringify(newRideDetails) ? newRideDetails : prevDetails,
+    )
+  }, [fareFromParams])
+
+  const handlePayment = () => {
+    // Handle payment logic here
+    console.log("Processing payment...")
+    // After successful payment, you might want to redirect to a ride tracking page
+    // router.push(`/ride-tracking/${params.id}`)
+  }
+
+  if (!rideDetails) return <div>Loading...</div>
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-8">
+      <Card className="max-w-3xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold">Ride Confirmation</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center">
+              <UserIcon className="h-5 w-5 mr-2" />
+              <span>Driver: {rideDetails.driverName}</span>
+            </div>
+            <div className="flex items-center">
+              <ClockIcon className="h-5 w-5 mr-2" />
+              <span>Pickup Time: {new Date(rideDetails.pickupTime).toLocaleString()}</span>
+            </div>
+            <div className="flex items-center">
+              <MapPinIcon className="h-5 w-5 mr-2" />
+              <span>Pickup: {rideDetails.pickupLocation}</span>
+            </div>
+            <div className="flex items-center">
+              <MapPinIcon className="h-5 w-5 mr-2" />
+              <span>Drop-off: {rideDetails.dropoffLocation}</span>
+            </div>
+            <div className="flex items-center">
+              <CarIcon className="h-5 w-5 mr-2" />
+              <span>Car: {rideDetails.carModel}</span>
+            </div>
+            <div className="flex items-center">
+              <CarIcon className="h-5 w-5 mr-2" />
+              <span>Plate: {rideDetails.carNumberplate}</span>
+            </div>
+            <div className="flex items-center">
+              <DollarSignIcon className="h-5 w-5 mr-2" />
+              <span>Fare: ${rideDetails.fare.toFixed(2)}</span>
+            </div>
+          </div>
+
+          <Button onClick={handlePayment} className="w-full">
+            Pay Now
+          </Button>
+        </CardContent>
+      </Card>
+      <Button className="mt-4" onClick={() => router.push("/home")}>
+        Back to Home
+      </Button>
+    </div>
+  )
+}
+</file>
+
+<file path="src/app/ride-history/page.tsx">
+"use client"
+
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { StarIcon, MapPinIcon } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+
+export default function RideHistoryPage() {
+  const router = useRouter()
+  const rides = [
+    { id: 1, driver: "Alice Smith", pickup: "123 Main St", dropoff: "456 Elm St", fare: "$15.50", rating: 5 },
+    { id: 2, driver: "Bob Johnson", pickup: "789 Oak Ave", dropoff: "321 Pine Rd", fare: "$22.75", rating: 4 },
+    { id: 3, driver: "Carol Williams", pickup: "159 Maple Ln", dropoff: "753 Birch Blvd", fare: "$18.00", rating: 5 },
+  ]
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-8">
+      <Card className="max-w-3xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold">Ride History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {rides.map((ride) => (
+              <div key={ride.id} className="bg-white p-4 rounded shadow space-y-2">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-semibold">{ride.driver}</h3>
+                  <span className="text-green-600 font-semibold">{ride.fare}</span>
+                </div>
+                <div className="flex items-center text-gray-500">
+                  <MapPinIcon className="h-4 w-4 mr-1" />
+                  <span className="text-sm">From: {ride.pickup}</span>
+                </div>
+                <div className="flex items-center text-gray-500">
+                  <MapPinIcon className="h-4 w-4 mr-1" />
+                  <span className="text-sm">To: {ride.dropoff}</span>
+                </div>
+                <div className="flex items-center">
+                  <span className="text-yellow-500 mr-1">
+                    {Array.from({ length: ride.rating }).map((_, index) => (
+                      <StarIcon key={index} className="h-4 w-4 inline" />
+                    ))}
+                  </span>
+                  <span className="ml-1">{ride.rating}/5</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+      <Button className="mt-4" onClick={() => router.push("/home")}>
+        Back to Home
+      </Button>
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="ghost" className="w-full py-4">
+              HELP
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            {/* <DialogHeader> */}
+              <DialogTitle>How can we help you?</DialogTitle>
+            {/* </DialogHeader> */}
+            <div className="space-y-4">
+              <Button onClick={() => router.push("/chatbot?issue=safety")} className="w-full">
+                Report Safety Issues
+              </Button>
+              <Button onClick={() => router.push("/chatbot?issue=lost-item")} className="w-full">
+                Find Lost Item
+              </Button>
+              <Button onClick={() => router.push("/chatbot?issue=feedback")} className="w-full">
+                Provide Feedback to Driver
+              </Button>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button className="w-full">Contact Us</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Contact Us</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <Button onClick={() => (window.location.href = "mailto:xyz@hitchiked.com")} className="w-full">
+                      Email us at xyz@hitchiked.com
+                    </Button>
+                    <Button onClick={() => (window.location.href = "tel:8575406410")} className="w-full">
+                      Call us at 857-540-6410
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </div>
+  )
+}
+</file>
+
+<file path="src/components/ui/avatar.tsx">
+"use client"
+
+import * as React from "react"
+import * as AvatarPrimitive from "@radix-ui/react-avatar"
+
+import { cn } from "@/lib/utils"
+
+const Avatar = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Root
+    ref={ref}
+    className={cn(
+      "relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full",
+      className
+    )}
+    {...props}
+  />
+))
+Avatar.displayName = AvatarPrimitive.Root.displayName
+
+const AvatarImage = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Image>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Image
+    ref={ref}
+    className={cn("aspect-square h-full w-full", className)}
+    {...props}
+  />
+))
+AvatarImage.displayName = AvatarPrimitive.Image.displayName
+
+const AvatarFallback = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Fallback>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Fallback
+    ref={ref}
+    className={cn(
+      "flex h-full w-full items-center justify-center rounded-full bg-muted",
+      className
+    )}
+    {...props}
+  />
+))
+AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName
+
+export { Avatar, AvatarImage, AvatarFallback }
+</file>
+
+<file path="src/components/ui/button.tsx">
+import * as React from "react"
+import { Slot } from "@radix-ui/react-slot"
+import { cva, type VariantProps } from "class-variance-authority"
+
+import { cn } from "@/lib/utils"
+
+const buttonVariants = cva(
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  {
+    variants: {
+      variant: {
+        default:
+          "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+        destructive:
+          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+        outline:
+          "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
+        secondary:
+          "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
+        ghost: "hover:bg-accent hover:text-accent-foreground",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "h-9 px-4 py-2",
+        sm: "h-8 rounded-md px-3 text-xs",
+        lg: "h-10 rounded-md px-8",
+        icon: "h-9 w-9",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+)
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean
+}
+
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, asChild = false, ...props }, ref) => {
+    const Comp = asChild ? Slot : "button"
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
+)
+Button.displayName = "Button"
+
+export { Button, buttonVariants }
+</file>
+
+<file path="src/components/ui/calendar.tsx">
+"use client"
+
+import * as React from "react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
+import { DayPicker } from "react-day-picker"
+
+import { cn } from "@/lib/utils"
+import { buttonVariants } from "@/components/ui/button"
+
+export type CalendarProps = React.ComponentProps<typeof DayPicker>
+
+function Calendar({
+  className,
+  classNames,
+  showOutsideDays = true,
+  ...props
+}: CalendarProps) {
+  return (
+    <DayPicker
+      showOutsideDays={showOutsideDays}
+      className={cn("p-3", className)}
+      classNames={{
+        months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
+        month: "space-y-4",
+        caption: "flex justify-center pt-1 relative items-center",
+        caption_label: "text-sm font-medium",
+        nav: "space-x-1 flex items-center",
+        nav_button: cn(
+          buttonVariants({ variant: "outline" }),
+          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
+        ),
+        nav_button_previous: "absolute left-1",
+        nav_button_next: "absolute right-1",
+        table: "w-full border-collapse space-y-1",
+        head_row: "flex",
+        head_cell:
+          "text-muted-foreground rounded-md w-8 font-normal text-[0.8rem]",
+        row: "flex w-full mt-2",
+        cell: cn(
+          "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-accent [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected].day-range-end)]:rounded-r-md",
+          props.mode === "range"
+            ? "[&:has(>.day-range-end)]:rounded-r-md [&:has(>.day-range-start)]:rounded-l-md first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md"
+            : "[&:has([aria-selected])]:rounded-md"
+        ),
+        day: cn(
+          buttonVariants({ variant: "ghost" }),
+          "h-8 w-8 p-0 font-normal aria-selected:opacity-100"
+        ),
+        day_range_start: "day-range-start",
+        day_range_end: "day-range-end",
+        day_selected:
+          "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+        day_today: "bg-accent text-accent-foreground",
+        day_outside:
+          "day-outside text-muted-foreground aria-selected:bg-accent/50 aria-selected:text-muted-foreground",
+        day_disabled: "text-muted-foreground opacity-50",
+        day_range_middle:
+          "aria-selected:bg-accent aria-selected:text-accent-foreground",
+        day_hidden: "invisible",
+        ...classNames,
+      }}
+      components={{
+        IconLeft: ({ className, ...props }) => (
+          <ChevronLeft className={cn("h-4 w-4", className)} {...props} />
+        ),
+        IconRight: ({ className, ...props }) => (
+          <ChevronRight className={cn("h-4 w-4", className)} {...props} />
+        ),
+      }}
+      {...props}
+    />
+  )
+}
+Calendar.displayName = "Calendar"
+
+export { Calendar }
+</file>
+
+<file path="src/components/ui/card.tsx">
+import * as React from "react"
+
+import { cn } from "@/lib/utils"
+
+const Card = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn(
+      "rounded-xl border bg-card text-card-foreground shadow",
+      className
+    )}
+    {...props}
+  />
+))
+Card.displayName = "Card"
+
+const CardHeader = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("flex flex-col space-y-1.5 p-6", className)}
+    {...props}
+  />
+))
+CardHeader.displayName = "CardHeader"
+
+const CardTitle = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("font-semibold leading-none tracking-tight", className)}
+    {...props}
+  />
+))
+CardTitle.displayName = "CardTitle"
+
+const CardDescription = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("text-sm text-muted-foreground", className)}
+    {...props}
+  />
+))
+CardDescription.displayName = "CardDescription"
+
+const CardContent = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+))
+CardContent.displayName = "CardContent"
+
+const CardFooter = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("flex items-center p-6 pt-0", className)}
+    {...props}
+  />
+))
+CardFooter.displayName = "CardFooter"
+
+export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
+</file>
+
+<file path="src/components/ui/dialog.tsx">
+"use client"
+
+import * as React from "react"
+import * as DialogPrimitive from "@radix-ui/react-dialog"
+import { X } from "lucide-react"
+
+import { cn } from "@/lib/utils"
+
+const Dialog = DialogPrimitive.Root
+
+const DialogTrigger = DialogPrimitive.Trigger
+
+const DialogPortal = DialogPrimitive.Portal
+
+const DialogClose = DialogPrimitive.Close
+
+const DialogOverlay = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Overlay>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Overlay
+    ref={ref}
+    className={cn(
+      "fixed inset-0 z-50 bg-black/80  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      className
+    )}
+    {...props}
+  />
+))
+DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
+
+const DialogContent = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
+>(({ className, children, ...props }, ref) => (
+  <DialogPortal>
+    <DialogOverlay />
+    <DialogPrimitive.Content
+      ref={ref}
+      className={cn(
+        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+        className
+      )}
+      {...props}
+    >
+      {children}
+      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+        <X className="h-4 w-4" />
+        <span className="sr-only">Close</span>
+      </DialogPrimitive.Close>
+    </DialogPrimitive.Content>
+  </DialogPortal>
+))
+DialogContent.displayName = DialogPrimitive.Content.displayName
+
+const DialogHeader = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn(
+      "flex flex-col space-y-1.5 text-center sm:text-left",
+      className
+    )}
+    {...props}
+  />
+)
+DialogHeader.displayName = "DialogHeader"
+
+const DialogFooter = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn(
+      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+      className
+    )}
+    {...props}
+  />
+)
+DialogFooter.displayName = "DialogFooter"
+
+const DialogTitle = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Title>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Title
+    ref={ref}
+    className={cn(
+      "text-lg font-semibold leading-none tracking-tight",
+      className
+    )}
+    {...props}
+  />
+))
+DialogTitle.displayName = DialogPrimitive.Title.displayName
+
+const DialogDescription = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Description>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Description
+    ref={ref}
+    className={cn("text-sm text-muted-foreground", className)}
+    {...props}
+  />
+))
+DialogDescription.displayName = DialogPrimitive.Description.displayName
+
+export {
+  Dialog,
+  DialogPortal,
+  DialogOverlay,
+  DialogTrigger,
+  DialogClose,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+}
+</file>
+
+<file path="src/components/ui/input.tsx">
+import * as React from "react"
+
+import { cn } from "@/lib/utils"
+
+const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
+  ({ className, type, ...props }, ref) => {
+    return (
+      <input
+        type={type}
+        className={cn(
+          "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+          className
+        )}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
+)
+Input.displayName = "Input"
+
+export { Input }
+</file>
+
+<file path="src/components/ui/label.tsx">
+"use client"
+
+import * as React from "react"
+import * as LabelPrimitive from "@radix-ui/react-label"
+import { cva, type VariantProps } from "class-variance-authority"
+
+import { cn } from "@/lib/utils"
+
+const labelVariants = cva(
+  "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+)
+
+const Label = React.forwardRef<
+  React.ElementRef<typeof LabelPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root> &
+    VariantProps<typeof labelVariants>
+>(({ className, ...props }, ref) => (
+  <LabelPrimitive.Root
+    ref={ref}
+    className={cn(labelVariants(), className)}
+    {...props}
+  />
+))
+Label.displayName = LabelPrimitive.Root.displayName
+
+export { Label }
+</file>
+
+<file path="src/components/ui/popover.tsx">
+"use client"
+
+import * as React from "react"
+import * as PopoverPrimitive from "@radix-ui/react-popover"
+
+import { cn } from "@/lib/utils"
+
+const Popover = PopoverPrimitive.Root
+
+const PopoverTrigger = PopoverPrimitive.Trigger
+
+const PopoverAnchor = PopoverPrimitive.Anchor
+
+const PopoverContent = React.forwardRef<
+  React.ElementRef<typeof PopoverPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
+>(({ className, align = "center", sideOffset = 4, ...props }, ref) => (
+  <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Content
+      ref={ref}
+      align={align}
+      sideOffset={sideOffset}
+      className={cn(
+        "z-50 w-72 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        className
+      )}
+      {...props}
+    />
+  </PopoverPrimitive.Portal>
+))
+PopoverContent.displayName = PopoverPrimitive.Content.displayName
+
+export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor }
+</file>
+
+<file path="src/components/ui/radio-group.tsx">
+"use client"
+
+import * as React from "react"
+import * as RadioGroupPrimitive from "@radix-ui/react-radio-group"
+import { Circle } from "lucide-react"
+
+import { cn } from "@/lib/utils"
+
+const RadioGroup = React.forwardRef<
+  React.ElementRef<typeof RadioGroupPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Root>
+>(({ className, ...props }, ref) => {
+  return (
+    <RadioGroupPrimitive.Root
+      className={cn("grid gap-2", className)}
+      {...props}
+      ref={ref}
+    />
+  )
+})
+RadioGroup.displayName = RadioGroupPrimitive.Root.displayName
+
+const RadioGroupItem = React.forwardRef<
+  React.ElementRef<typeof RadioGroupPrimitive.Item>,
+  React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Item>
+>(({ className, ...props }, ref) => {
+  return (
+    <RadioGroupPrimitive.Item
+      ref={ref}
+      className={cn(
+        "aspect-square h-4 w-4 rounded-full border border-primary text-primary shadow focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+        className
+      )}
+      {...props}
+    >
+      <RadioGroupPrimitive.Indicator className="flex items-center justify-center">
+        <Circle className="h-3.5 w-3.5 fill-primary" />
+      </RadioGroupPrimitive.Indicator>
+    </RadioGroupPrimitive.Item>
+  )
+})
+RadioGroupItem.displayName = RadioGroupPrimitive.Item.displayName
+
+export { RadioGroup, RadioGroupItem }
+</file>
+
+<file path="src/components/ui/sheet.tsx">
+"use client"
+
+import * as React from "react"
+import * as SheetPrimitive from "@radix-ui/react-dialog"
+import { cva, type VariantProps } from "class-variance-authority"
+import { X } from "lucide-react"
+
+import { cn } from "@/lib/utils"
+
+const Sheet = SheetPrimitive.Root
+
+const SheetTrigger = SheetPrimitive.Trigger
+
+const SheetClose = SheetPrimitive.Close
+
+const SheetPortal = SheetPrimitive.Portal
+
+const SheetOverlay = React.forwardRef<
+  React.ElementRef<typeof SheetPrimitive.Overlay>,
+  React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay>
+>(({ className, ...props }, ref) => (
+  <SheetPrimitive.Overlay
+    className={cn(
+      "fixed inset-0 z-50 bg-black/80  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      className
+    )}
+    {...props}
+    ref={ref}
+  />
+))
+SheetOverlay.displayName = SheetPrimitive.Overlay.displayName
+
+const sheetVariants = cva(
+  "fixed z-50 gap-4 bg-background p-6 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
+  {
+    variants: {
+      side: {
+        top: "inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
+        bottom:
+          "inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
+        left: "inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
+        right:
+          "inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
+      },
+    },
+    defaultVariants: {
+      side: "right",
+    },
+  }
+)
+
+interface SheetContentProps
+  extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
+    VariantProps<typeof sheetVariants> {}
+
+const SheetContent = React.forwardRef<
+  React.ElementRef<typeof SheetPrimitive.Content>,
+  SheetContentProps
+>(({ side = "right", className, children, ...props }, ref) => (
+  <SheetPortal>
+    <SheetOverlay />
+    <SheetPrimitive.Content
+      ref={ref}
+      className={cn(sheetVariants({ side }), className)}
+      {...props}
+    >
+      <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+        <X className="h-4 w-4" />
+        <span className="sr-only">Close</span>
+      </SheetPrimitive.Close>
+      {children}
+    </SheetPrimitive.Content>
+  </SheetPortal>
+))
+SheetContent.displayName = SheetPrimitive.Content.displayName
+
+const SheetHeader = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn(
+      "flex flex-col space-y-2 text-center sm:text-left",
+      className
+    )}
+    {...props}
+  />
+)
+SheetHeader.displayName = "SheetHeader"
+
+const SheetFooter = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn(
+      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+      className
+    )}
+    {...props}
+  />
+)
+SheetFooter.displayName = "SheetFooter"
+
+const SheetTitle = React.forwardRef<
+  React.ElementRef<typeof SheetPrimitive.Title>,
+  React.ComponentPropsWithoutRef<typeof SheetPrimitive.Title>
+>(({ className, ...props }, ref) => (
+  <SheetPrimitive.Title
+    ref={ref}
+    className={cn("text-lg font-semibold text-foreground", className)}
+    {...props}
+  />
+))
+SheetTitle.displayName = SheetPrimitive.Title.displayName
+
+const SheetDescription = React.forwardRef<
+  React.ElementRef<typeof SheetPrimitive.Description>,
+  React.ComponentPropsWithoutRef<typeof SheetPrimitive.Description>
+>(({ className, ...props }, ref) => (
+  <SheetPrimitive.Description
+    ref={ref}
+    className={cn("text-sm text-muted-foreground", className)}
+    {...props}
+  />
+))
+SheetDescription.displayName = SheetPrimitive.Description.displayName
+
+export {
+  Sheet,
+  SheetPortal,
+  SheetOverlay,
+  SheetTrigger,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetFooter,
+  SheetTitle,
+  SheetDescription,
+}
+</file>
+
+<file path="src/components/ui/tabs.tsx">
+"use client"
+
+import * as React from "react"
+import * as TabsPrimitive from "@radix-ui/react-tabs"
+
+import { cn } from "@/lib/utils"
+
+const Tabs = TabsPrimitive.Root
+
+const TabsList = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.List>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.List
+    ref={ref}
+    className={cn(
+      "inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground",
+      className
+    )}
+    {...props}
+  />
+))
+TabsList.displayName = TabsPrimitive.List.displayName
+
+const TabsTrigger = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.Trigger
+    ref={ref}
+    className={cn(
+      "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow",
+      className
+    )}
+    {...props}
+  />
+))
+TabsTrigger.displayName = TabsPrimitive.Trigger.displayName
+
+const TabsContent = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.Content
+    ref={ref}
+    className={cn(
+      "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      className
+    )}
+    {...props}
+  />
+))
+TabsContent.displayName = TabsPrimitive.Content.displayName
+
+export { Tabs, TabsList, TabsTrigger, TabsContent }
+</file>
+
+<file path="src/components/ui/textarea.tsx">
+import * as React from "react"
+
+import { cn } from "@/lib/utils"
+
+const Textarea = React.forwardRef<
+  HTMLTextAreaElement,
+  React.ComponentProps<"textarea">
+>(({ className, ...props }, ref) => {
+  return (
+    <textarea
+      className={cn(
+        "flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+        className
+      )}
+      ref={ref}
+      {...props}
+    />
+  )
+})
+Textarea.displayName = "Textarea"
+
+export { Textarea }
+</file>
+
+<file path="src/lib/utils.ts">
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+</file>
+
+<file path="src/app/auth/payment-setup/page.tsx">
+"use client"
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
+
+
+// import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+
+export default function PaymentSetup() {
+  const router = useRouter()
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    // Handle form submission
+    console.log("Payment method saved")
+    // Redirect to ride-sharing app homepage
+    router.push("/home")
+  }
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <Card className="w-[400px]">
+        <CardHeader>
+          <CardTitle>Set up payment method</CardTitle>
+          <CardDescription>Please enter your credit card details</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="cardNumber">Card Number</Label>
+              <Input id="cardNumber" type="text" placeholder="1234 5678 9012 3456" required />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="expiryDate">Expiry Date</Label>
+                <Input id="expiryDate" type="text" placeholder="MM/YY" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cvv">CVV</Label>
+                <Input id="cvv" type="text" placeholder="123" required />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="nameOnCard">Name on Card</Label>
+              <Input id="nameOnCard" type="text" placeholder="John Doe" required />
+            </div>
+            <Button type="submit" className="w-full">
+              Save Payment Method
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+</file>
+
+<file path="src/app/auth/profile-setup/page.tsx">
+"use client"
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+
+export default function ProfileSetup() {
+  const router = useRouter()
+  const [avatar, setAvatar] = useState<string | null>(null)
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    // Handle form submission
+    console.log("Profile setup submitted")
+    // Redirect to dashboard or home page
+    router.push("/auth/payment-setup")
+  }
+
+  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setAvatar(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <Card className="w-[450px]">
+        <CardHeader>
+          <CardTitle>Set up your profile</CardTitle>
+          <CardDescription>Please provide additional information to complete your profile</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex flex-col items-center space-y-2">
+              <Avatar className="w-24 h-24">
+                <AvatarImage src={avatar || ""} alt="Profile picture" />
+                <AvatarFallback>UP</AvatarFallback>
+              </Avatar>
+              <Label htmlFor="avatar" className="cursor-pointer text-sm text-blue-500 hover:text-blue-600">
+                Upload Profile Picture
+              </Label>
+              <Input id="avatar" type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phoneNumber">Phone Number</Label>
+              <Input id="phoneNumber" type="tel" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="companyName">Company Name</Label>
+              <Input id="companyName" type="text" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="occupation">Occupation</Label>
+              <Input id="occupation" type="text" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="interests">Interests</Label>
+              <Textarea id="interests" placeholder="Enter your interests, separated by commas" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="idUpload">Upload ID</Label>
+              <Input id="idUpload" type="file" accept="image/*,.pdf" required />
+            </div>
+            <Button type="submit" className="w-full">
+              Complete Profile Setup
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+</file>
+
+<file path="src/app/available-drivers/page.tsx">
+import { Suspense } from "react"
+import AvailableDriversClient from "./availableDriversPage"
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <AvailableDriversClient />
+    </Suspense>
+  )
+}
+</file>
+
+<file path="src/app/driver-details/[id]/page.tsx">
+"use client"
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
+
+
+import { useState, useEffect } from "react"
+import { useRouter, useParams } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { StarIcon, CarIcon, MapPinIcon, DollarSignIcon } from "lucide-react"
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+
+interface Driver {
+  id: string
+  name: string
+  rating: number
+  fare: number
+  destination: string
+  carModel: string
+  ridesCompleted: number
+  profilePicture: string
+  occupation: string
+  interests: string[]
+  bio: string
+}
+
+export default function DriverDetailsPage() {
+  const router = useRouter()
+  const params = useParams()
+  const [driver, setDriver] = useState<Driver | null>(null)
+  const [showNegotiate, setShowNegotiate] = useState(false)
+  const [negotiatedFare, setNegotiatedFare] = useState(0)
+  const [showRejectionDialog, setShowRejectionDialog] = useState(false)
+
+  useEffect(() => {
+    // In a real app, you would fetch this data from an API
+    setDriver({
+      id: params.id as string,
+      name: "John Doe",
+      rating: 4.8,
+      fare: 15.5,
+      destination: "Downtown",
+      carModel: "Toyota Camry",
+      ridesCompleted: 500,
+      profilePicture: "/placeholder.svg?height=100&width=100",
+      occupation: "Software Engineer",
+      interests: ["Music", "Hiking", "Photography"],
+      bio: "Friendly driver with 5 years of experience. Always punctual and enjoys good conversation.",
+    })
+  }, [params.id])
+
+  const handleAcceptRide = () => {
+    router.push(`/ride-confirmation/${driver?.id}`)
+  }
+
+  const handleNegotiateFare = (discount: number) => {
+    const newFare = driver ? driver.fare * (1 - discount) : 0
+    setNegotiatedFare(newFare)
+    setShowNegotiate(true)
+  }
+
+  const handleSendNewFareRequest = () => {
+    // Simulate API call to send new fare request
+    setTimeout(() => {
+      // Randomly decide if the driver accepts or rejects the new fare
+      const driverAccepts = Math.random() > 0.5
+      if (driverAccepts) {
+        router.push(`/ride-confirmation/${driver?.id}?fare=${negotiatedFare}`)
+      } else {
+        setShowRejectionDialog(true)
+      }
+    }, 1000)
+  }
+
+  if (!driver) return <div>Loading...</div>
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-8">
+      <Card className="max-w-3xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold">Driver Details</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center space-x-4">
+            <Avatar className="h-20 w-20">
+              <AvatarImage src={driver.profilePicture} alt={driver.name} />
+              <AvatarFallback>
+                {driver.name
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h2 className="text-2xl font-bold">{driver.name}</h2>
+              <p className="text-gray-500">{driver.occupation}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center">
+              <StarIcon className="h-5 w-5 mr-2 text-yellow-400" />
+              <span>{driver.rating.toFixed(1)} Rating</span>
+            </div>
+            <div className="flex items-center">
+              <CarIcon className="h-5 w-5 mr-2" />
+              <span>{driver.carModel}</span>
+            </div>
+            <div className="flex items-center">
+              <MapPinIcon className="h-5 w-5 mr-2" />
+              <span>Destination: {driver.destination}</span>
+            </div>
+            <div className="flex items-center">
+              <DollarSignIcon className="h-5 w-5 mr-2" />
+              <span>${driver.fare.toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="font-semibold mb-2">Bio</h3>
+            <p>{driver.bio}</p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold mb-2">Interests</h3>
+            <div className="flex flex-wrap gap-2">
+              {driver.interests.map((interest, index) => (
+                <span key={index} className="bg-gray-200 px-2 py-1 rounded">
+                  {interest}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="font-semibold mb-2">Rides Completed</h3>
+            <p>{driver.ridesCompleted}</p>
+          </div>
+
+          <div className="flex justify-between">
+            <Button onClick={handleAcceptRide}>Accept Ride</Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline">Negotiate Fare</Button>
+              </DialogTrigger>
+              <DialogTitle>
+              <DialogContent>
+                {/* <DialogHeader> */}
+                  <DialogTitle>Negotiate Fare</DialogTitle>
+                {/* </DialogHeader> */}
+                <div className="space-y-4">
+                  <Button onClick={() => handleNegotiateFare(0.05)} className="w-full">
+                    5% lower (${(driver.fare * 0.95).toFixed(2)})
+                  </Button>
+                  <Button onClick={() => handleNegotiateFare(0.1)} className="w-full">
+                    10% lower (${(driver.fare * 0.9).toFixed(2)})
+                  </Button>
+                  {showNegotiate && (
+                    <div>
+                      <p>New fare: ${negotiatedFare.toFixed(2)}</p>
+                      <Button onClick={handleSendNewFareRequest} className="w-full mt-2">
+                        Send New Fare Request
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+              </DialogTitle>
+            </Dialog>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={showRejectionDialog} onOpenChange={setShowRejectionDialog}>
+      <DialogTitle>
+        
+        <DialogContent>
+          {/* <DialogHeader> */}
+            <DialogTitle>Negotiation Rejected</DialogTitle>
+          {/* </DialogHeader> */}
+          <p>
+            The driver has rejected your new fare request. Would you like to proceed with the original fare or cancel
+            the ride?
+          </p>
+          <div className="flex justify-between mt-4">
+            <Button onClick={() => router.push(`/ride-confirmation/${driver.id}`)}>Accept Original Fare</Button>
+            <Button variant="outline" onClick={() => router.push("/available-drivers")}>
+              Cancel Ride
+            </Button>
+          </div>
+        </DialogContent>
+        </DialogTitle>
+
+      </Dialog>
+
+      <Button className="mt-4" onClick={() => router.push("/available-drivers")}>
+        Back to Available Drivers
+      </Button>
+    </div>
+  )
+}
+</file>
+
+<file path="src/app/home/page.tsx">
+"use client"
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
+
+import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { CalendarIcon, MapPinIcon, MenuIcon } from "lucide-react"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { format } from "date-fns"
+// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
+export default function HomePage() {
+  const router = useRouter()
+  const [date, setDate] = useState<Date>()
+  const [time, setTime] = useState<string>()
+  const [pickup, setPickup] = useState("")
+  const [dropoff, setDropoff] = useState("")
+  
+  const pickupRef = useRef<HTMLInputElement>(null)
+  const dropoffRef = useRef<HTMLInputElement>(null)
+  
+  const mapRef = useRef<HTMLDivElement>(null)
+  // const [map, setMap] = useState<google.maps.Map | null>(null)
+  
+
+  // Initialize Google Maps
+  useEffect(() => {
+    // Load Google Maps JavaScript API
+    const script = document.createElement('script')
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`
+    script.async = true
+    script.defer = true
+    document.head.appendChild(script)
+
+    script.onload = () => {
+      if (mapRef.current) {
+        // Initialize map centered on Boston
+        new google.maps.Map(mapRef.current, {
+          center: { lat: 42.350876, lng: -71.106918 }, // Boston coordinates
+          zoom: 13,
+        })
+        // const mapInstance = new google.maps.Map(mapRef.current, {
+        //   center: { lat: 42.350876, lng: -71.106918 }, // Boston coordinates
+        //   zoom: 13,
+        //   // disableDefaultUI: true,
+        //   /* styles: [
+        //     {
+        //       elementType: "geometry",
+        //       stylers: [{ color: "#f5f5f5" }]
+        //     },
+        //     {
+        //       elementType: "labels.icon",
+        //       stylers: [{ visibility: "off" }]
+        //     },
+        //     {
+        //       elementType: "labels.text.fill",
+        //       stylers: [{ color: "#616161" }]
+        //     },
+        //     {
+        //       elementType: "labels.text.stroke",
+        //       stylers: [{ color: "#f5f5f5" }]
+        //     }
+        //   ] */
+        // })
+        // setMap(mapInstance)
+      }
+
+      if (pickupRef.current && dropoffRef.current) {
+        // Initialize Autocomplete for pickup
+        const pickupAutocomplete = new google.maps.places.Autocomplete(pickupRef.current, {
+          fields: ["formatted_address", "geometry"],
+          types: ["address"]
+        })
+
+        // Initialize Autocomplete for dropoff
+        const dropoffAutocomplete = new google.maps.places.Autocomplete(dropoffRef.current, {
+          fields: ["formatted_address", "geometry"],
+          types: ["address"]
+        })
+
+        // Handle place selection for pickup
+        pickupAutocomplete.addListener("place_changed", () => {
+          const place = pickupAutocomplete.getPlace()
+          setPickup(place.formatted_address || "")
+        })
+
+        // Handle place selection for dropoff
+        dropoffAutocomplete.addListener("place_changed", () => {
+          const place = dropoffAutocomplete.getPlace()
+          setDropoff(place.formatted_address || "")
+        })
+      }
+    }
+
+    return () => {
+      document.head.removeChild(script)
+    }
+  }, [])
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const formattedTime = time
+      ? new Date(`2000-01-01T${time}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "numeric", hour12: true })
+      : undefined
+    console.log("Ride requested", { date, time: formattedTime, pickup, dropoff })
+    router.push(
+      `/available-drivers?pickup=${encodeURIComponent(pickup)}&dropoff=${encodeURIComponent(dropoff)}&date=${date?.toISOString()}&time=${encodeURIComponent(formattedTime || "")}`,
+    )
+  }
+
+  const handleLogout = () => {
+    // Handle logout logic here (e.g., clear session, tokens, etc.)
+    router.push("/auth")
+  }
+
+  return (
+    <div className="h-screen w-screen relative overflow-hidden">
+      {/* Map Container */}
+      <div ref={mapRef} className="absolute inset-0 w-full h-full" />
+
+      {/* Menu Button */}
+      <Sheet>
+        <SheetTrigger asChild>
+          <Button variant="outline" size="icon" className="fixed top-4 left-4 z-50 bg-white">
+            <MenuIcon className="h-4 w-4" />
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="left">
+          <nav className="flex flex-col h-full">
+            <h2 className="text-lg font-semibold mb-4">Menu</h2>
+            <Button variant="ghost" className="justify-start" onClick={() => router.push("/profile")}>
+              Profile
+            </Button>
+            <Button variant="ghost" className="justify-start" onClick={() => router.push("/addresses")}>
+              Addresses
+            </Button>
+            <Button variant="ghost" className="justify-start" onClick={() => router.push("/ride-history")}>
+              Ride History
+            </Button>
+            <Button variant="ghost" className="justify-start" onClick={() => router.push("/payment-methods")}>
+              Payment Methods
+            </Button>
+            <Button variant="ghost" className="justify-start mt-auto" onClick={handleLogout}>
+              Log Out
+            </Button>
+          </nav>
+        </SheetContent>
+      </Sheet>
+
+      {/* Ride Request Card */}
+      <div className="absolute bottom-0 left-0 right-0 w-full px-4 pb-4 z-40">
+        <Card className="shadow-2xl">
+          <CardHeader>
+            <CardTitle>Request a Ride</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="pickup">Pickup Location</Label>
+                <div className="flex">
+                  <MapPinIcon className="w-5 h-5 mr-2 text-muted-foreground" />
+                  <Input
+                    id="pickup"
+                    ref={pickupRef}
+                    placeholder="Enter pickup location"
+                    required
+                    value={pickup}
+                    onChange={(e) => setPickup(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dropoff">Drop-off Location</Label>
+                <div className="flex">
+                  <MapPinIcon className="w-5 h-5 mr-2 text-muted-foreground" />
+                  <Input
+                    id="dropoff"
+                    ref={dropoffRef}
+                    placeholder="Enter drop-off location"
+                    required
+                    value={dropoff}
+                    onChange={(e) => setDropoff(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Pickup Date and Time</Label>
+                <div className="flex space-x-2">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-[180px] justify-start text-left font-normal">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {date ? format(date, "PPP") : <span>Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
+                    </PopoverContent>
+                  </Popover>
+                  <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-[180px]" />
+                </div>
+              </div>
+              <Button type="submit" className="w-full">
+                Request Ride
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+</file>
+
+<file path="src/app/layout.tsx">
+import './globals.css';
+import { ReactNode } from 'react';
+
+export const metadata = {
+  title: 'Ride Finder',
+  description: 'Find your rides at low prices',
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+</file>
+
+<file path="src/app/profile/page.tsx">
+"use client"
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
+
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+// import { StarIcon } from "lucide-react"
+
+export default function ProfilePage() {
+  const router = useRouter()
+  const [isEditing, setIsEditing] = useState(false)
+  const [profileData, setProfileData] = useState({
+    name: "John Doe",
+    picture: "/placeholder.svg?height=100&width=100",
+    co2Saved: "50 kg",
+    interests: ["Hiking", "Photography", "Travel"],
+    rating: 4.8,
+    ridesTaken: 25,
+    bio: "Friendly passenger who enjoys good conversation during rides.",
+  })
+
+  const reviews = [
+    { id: 1, text: "Great passenger!", rating: 5 },
+    { id: 2, text: "Very punctual and friendly.", rating: 4 },
+  ]
+
+  const handleEdit = () => {
+    setIsEditing(true)
+  }
+
+  const handleSave = () => {
+    setIsEditing(false)
+    // Here you would typically send the updated data to your backend
+    console.log("Saving profile data:", profileData)
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setProfileData({ ...profileData, [e.target.name]: e.target.value })
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-8">
+      <Card className="max-w-3xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold">Profile</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center space-x-4 mb-6">
+            <Avatar className="w-24 h-24">
+              <AvatarImage src={profileData.picture} alt={profileData.name} />
+              <AvatarFallback>
+                {profileData.name
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              {isEditing ? (
+                <Input name="name" value={profileData.name} onChange={handleChange} className="text-2xl font-bold" />
+              ) : (
+                <h2 className="text-2xl font-bold">{profileData.name}</h2>
+              )}
+              <p className="text-gray-500">CO2 Saved: {profileData.co2Saved}</p>
+            </div>
+          </div>
+
+          <Tabs defaultValue="general" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="reviews">Reviews</TabsTrigger>
+              <TabsTrigger value="rides">Rides</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="general">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">Bio</h3>
+                  {isEditing ? (
+                    <Textarea name="bio" value={profileData.bio} onChange={handleChange} rows={3} />
+                  ) : (
+                    <p>{profileData.bio}</p>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">Interests</h3>
+                  {isEditing ? (
+                    <Input
+                      name="interests"
+                      value={profileData.interests.join(", ")}
+                      onChange={(e) => setProfileData({ ...profileData, interests: e.target.value.split(", ") })}
+                    />
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {profileData.interests.map((interest, index) => (
+                        <span key={index} className="bg-gray-200 px-2 py-1 rounded">
+                          {interest}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="reviews">
+              <h3 className="text-lg font-semibold mb-2">Reviews</h3>
+              <div className="space-y-4">
+                {reviews.map((review) => (
+                  <div key={review.id} className="bg-white p-4 rounded shadow">
+                    <p>{review.text}</p>
+                    <p className="text-yellow-500">{"★".repeat(review.rating)}</p>
+                  </div>
+                ))}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="rides">
+              <h3 className="text-lg font-semibold mb-2">Ride Statistics</h3>
+              <p>Total Rides Taken: {profileData.ridesTaken}</p>
+              <p>Average Rating: {profileData.rating}</p>
+            </TabsContent>
+          </Tabs>
+
+          {isEditing ? (
+            <Button onClick={handleSave} className="mt-4">
+              Save Changes
+            </Button>
+          ) : (
+            <Button onClick={handleEdit} className="mt-4">
+              Edit Profile
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+      <Button className="mt-4" onClick={() => router.push("/home")}>
+        Back to Home
+      </Button>
+    </div>
+  )
+}
+</file>
+
+<file path="src/app/ride-confirmation/[id]/page.tsx">
+import { Suspense } from "react"
+import RideConfirmationPage from "./rideconfirmation"
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <RideConfirmationPage />
+    </Suspense>
+  )
+}
+</file>
+
+<file path="tailwind.config.js">
+module.exports = {
+    darkMode: ['class'],
+    content: [
+    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  theme: {
+  	extend: {
+  		colors: {
+  			primary: {
+  				DEFAULT: 'hsl(var(--primary))',
+  				foreground: 'hsl(var(--primary-foreground))'
+  			},
+  			secondary: {
+  				DEFAULT: 'hsl(var(--secondary))',
+  				foreground: 'hsl(var(--secondary-foreground))'
+  			},
+  			grayText: '#4A4A4A',
+  			background: 'hsl(var(--background))',
+  			foreground: 'hsl(var(--foreground))',
+  			card: {
+  				DEFAULT: 'hsl(var(--card))',
+  				foreground: 'hsl(var(--card-foreground))'
+  			},
+  			popover: {
+  				DEFAULT: 'hsl(var(--popover))',
+  				foreground: 'hsl(var(--popover-foreground))'
+  			},
+  			muted: {
+  				DEFAULT: 'hsl(var(--muted))',
+  				foreground: 'hsl(var(--muted-foreground))'
+  			},
+  			accent: {
+  				DEFAULT: 'hsl(var(--accent))',
+  				foreground: 'hsl(var(--accent-foreground))'
+  			},
+  			destructive: {
+  				DEFAULT: 'hsl(var(--destructive))',
+  				foreground: 'hsl(var(--destructive-foreground))'
+  			},
+  			border: 'hsl(var(--border))',
+  			input: 'hsl(var(--input))',
+  			ring: 'hsl(var(--ring))',
+  			chart: {
+  				'1': 'hsl(var(--chart-1))',
+  				'2': 'hsl(var(--chart-2))',
+  				'3': 'hsl(var(--chart-3))',
+  				'4': 'hsl(var(--chart-4))',
+  				'5': 'hsl(var(--chart-5))'
+  			}
+  		},
+  		borderRadius: {
+  			lg: 'var(--radius)',
+  			md: 'calc(var(--radius) - 2px)',
+  			sm: 'calc(var(--radius) - 4px)'
+  		}
+  	}
+  },
+  plugins: [require("tailwindcss-animate")],
+};
+</file>
+
+<file path="tailwind.config.ts">
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ['./src/**/*.{js,ts,jsx,tsx}'],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+};
+</file>
+
+<file path="package.json">
+{
+  "name": "hitch1",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@radix-ui/react-avatar": "^1.1.2",
+    "@radix-ui/react-dialog": "^1.1.5",
+    "@radix-ui/react-label": "^2.1.1",
+    "@radix-ui/react-popover": "^1.1.5",
+    "@radix-ui/react-radio-group": "^1.2.2",
+    "@radix-ui/react-slot": "^1.1.1",
+    "@radix-ui/react-tabs": "^1.1.2",
+    "@react-google-maps/api": "^2.20.6",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.474.0",
+    "next": "15.1.5",
+    "react": "^19.0.0",
+    "react-day-picker": "^8.10.1",
+    "react-dom": "^19.0.0",
+    "socket.io-client": "^4.8.1",
+    "tailwind-merge": "^3.0.1",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@types/google.maps": "^3.58.1",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9",
+    "eslint-config-next": "15.1.5",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5"
+  }
+}
+</file>
+
+<file path="src/app/globals.css">
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 3.9%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem
+  }
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%
+  }
+}
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+</file>
+
+<file path="src/app/map/page.tsx">
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { createSocket } from "@/utils/socket";
+import type { Socket } from "socket.io-client";
+import { emitLocationUpdate, registerUser, UserLocation } from "./socket-map-helpers";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { TimePicker } from "@/components/ui/time-picker";
+import { SocketStatusCard } from "@/components/ui/socket-status-card";
+
+interface MarkerWithId {
+  marker: google.maps.Marker;
+  userId: string;
+}
+
+export default function MapPage() {
+  // Socket status state
+  const [socketStatus, setSocketStatus] = useState<"connected" | "connecting" | "disconnected">("connecting");
+  const [socketDetails, setSocketDetails] = useState<string>("");
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [error, setError] = useState("");
+  const [otherUsers, setOtherUsers] = useState<UserLocation[]>([]);
+  const socketRef = useRef<Socket | null>(null);
+  const mapInstance = useRef<google.maps.Map | null>(null);
+  const myMarker = useRef<google.maps.Marker | null>(null);
+  const otherMarkers = useRef<MarkerWithId[]>([]);
+
+  const pickupRef = useRef<HTMLInputElement>(null);
+  const dropoffRef = useRef<HTMLInputElement>(null);
+
+  // Get userId and role from localStorage
+  const userId = typeof window !== 'undefined' ? localStorage.getItem("userId") : null;
+  const role = typeof window !== 'undefined' ? localStorage.getItem("role") as "driver" | "rider" : null;
+
+  // Get live location
+  useEffect(() => {
+    let watchId: number;
+    if (navigator.geolocation) {
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        (err) => setError("Could not get location: " + err.message),
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+      );
+    } else {
+      setError("Geolocation not supported");
+    }
+    return () => {
+      if (navigator.geolocation && watchId !== undefined) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, []);
+
+  // Initialize socket and map
+  useEffect(() => {
+    if (!location || !userId || !role || !mapRef.current || typeof window === "undefined" || !window.google || !window.google.maps) return;
+
+    // Setup map
+    if (!mapInstance.current) {
+      mapInstance.current = new window.google.maps.Map(mapRef.current, {
+        center: location,
+        zoom: 15,
+      });
+    } else {
+      mapInstance.current.setCenter(location);
+    }
+
+    // Place/update self marker
+    if (!myMarker.current) {
+      myMarker.current = new window.google.maps.Marker({
+        position: location,
+        map: mapInstance.current,
+        title: "You are here",
+        icon: {
+          url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+        },
+      });
+    } else {
+      myMarker.current.setPosition(location);
+    }
+
+    // Setup socket connection
+    if (!socketRef.current) {
+      const socket = createSocket(userId, role);
+      socketRef.current = socket;
+      setSocketStatus("connecting");
+      setSocketDetails("Connecting to server...");
+      // Register user on connect
+      socket.on("connect", () => {
+        setSocketStatus("connected");
+        setSocketDetails(`Socket ID: ${socket.id}`);
+        registerUser(socket, userId, role, location.lat, location.lng);
+      });
+      socket.on("disconnect", (reason: string) => {
+        setSocketStatus("disconnected");
+        setSocketDetails(reason ? `Disconnected: ${reason}` : "Disconnected");
+      });
+      socket.on("connect_error", (err: any) => {
+        setSocketStatus("disconnected");
+        setSocketDetails("Connection error");
+      });
+      socket.on("reconnect_attempt", () => {
+        setSocketStatus("connecting");
+        setSocketDetails("Reconnecting...");
+      });
+      // Listen for other users' locations
+      socket.on("user:location", (data: UserLocation) => {
+        setOtherUsers((prev) => {
+          // Replace or add user
+          const filtered = prev.filter(u => u.userId !== data.userId);
+          return [...filtered, data];
+        });
+      });
+    } else {
+      // If already connected, send register again (for location update)
+      registerUser(socketRef.current, userId, role, location.lat, location.lng);
+    }
+
+    // Emit own location update
+    if (socketRef.current) {
+      emitLocationUpdate(socketRef.current, location.lat, location.lng);
+    }
+
+    // Render other users' markers
+    otherMarkers.current.forEach(({ marker }) => marker.setMap(null));
+    otherMarkers.current = otherUsers.map((u) => {
+      // Don't show yourself
+      if (u.userId === userId) return null;
+      const marker = new window.google.maps.Marker({
+        position: { lat: u.lat, lng: u.lng },
+        map: mapInstance.current!,
+        icon: {
+          url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
+        },
+        title: `User: ${u.userId}`,
+      });
+      return { marker, userId: u.userId };
+    }).filter(Boolean) as MarkerWithId[];
+
+    // Cleanup on unmount
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      otherMarkers.current.forEach(({ marker }) => marker.setMap(null));
+      if (myMarker.current) myMarker.current.setMap(null);
+      mapInstance.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location, userId, role, otherUsers.length]);
+
+  // Form state for ride/drive card
+  const [pickup, setPickup] = useState("");
+  const [dropoff, setDropoff] = useState("");
+  const [date, setDate] = useState<Date | undefined>();
+  const [time, setTime] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [success, setSuccess] = useState("");
+
+
+    // Initialize Google Maps
+    useEffect(() => {
+      // Load Google Maps JavaScript API
+      const script = document.createElement('script')
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`
+      script.async = true
+      script.defer = true
+      document.head.appendChild(script)
+  
+      script.onload = () => {
+        if (mapRef.current) {
+          // Initialize map centered on Boston
+          new google.maps.Map(mapRef.current, {
+            center: { lat: 42.350876, lng: -71.106918 }, // Boston coordinates
+            zoom: 13,
+          })
+          // const mapInstance = new google.maps.Map(mapRef.current, {
+          //   center: { lat: 42.350876, lng: -71.106918 }, // Boston coordinates
+          //   zoom: 13,
+          //   // disableDefaultUI: true,
+          //   /* styles: [
+          //     {
+          //       elementType: "geometry",
+          //       stylers: [{ color: "#f5f5f5" }]
+          //     },
+          //     {
+          //       elementType: "labels.icon",
+          //       stylers: [{ visibility: "off" }]
+          //     },
+          //     {
+          //       elementType: "labels.text.fill",
+          //       stylers: [{ color: "#616161" }]
+          //     },
+          //     {
+          //       elementType: "labels.text.stroke",
+          //       stylers: [{ color: "#f5f5f5" }]
+          //     }
+          //   ] */
+          // })
+          // setMap(mapInstance)
+        }
+  
+        if (pickupRef.current && dropoffRef.current) {
+          // Initialize Autocomplete for pickup
+          const pickupAutocomplete = new google.maps.places.Autocomplete(pickupRef.current, {
+            fields: ["formatted_address", "geometry"],
+            types: ["address"]
+          })
+  
+          // Initialize Autocomplete for dropoff
+          const dropoffAutocomplete = new google.maps.places.Autocomplete(dropoffRef.current, {
+            fields: ["formatted_address", "geometry"],
+            types: ["address"]
+          })
+  
+          // Handle place selection for pickup
+          pickupAutocomplete.addListener("place_changed", () => {
+            const place = pickupAutocomplete.getPlace()
+            setPickup(place.formatted_address || "")
+          })
+  
+          // Handle place selection for dropoff
+          dropoffAutocomplete.addListener("place_changed", () => {
+            const place = dropoffAutocomplete.getPlace()
+            setDropoff(place.formatted_address || "")
+          })
+        }
+      }
+  
+      return () => {
+        document.head.removeChild(script)
+      }
+    }, [])
+
+  // Handlers for booking
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setFormError("");
+    setSuccess("");
+    if (!pickup || !dropoff || !date || !time) {
+      setFormError("All fields are required.");
+      return;
+    }
+    setLoading(true);
+    try {
+      // TODO: Geocode pickup/dropoff to lat/lng if needed. For now, assume pickup/dropoff are lat/lng objects.
+      // If pickup/dropoff are strings, you must call a geocoding API here.
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      if (!backendUrl) {
+        setFormError("Backend URL is not configured.");
+        setLoading(false);
+        return;
+      }
+      if (!location) {
+        setFormError("Current location not available.");
+        setLoading(false);
+        return;
+      }
+      if (role === "rider") {
+        // POST /api/requests
+        const body = {
+          riderId: userId,
+          origin: typeof pickup === 'object' ? pickup : location, // fallback to current location if not geocoded
+          destination: typeof dropoff === 'object' ? dropoff : location, // fallback to current location if not geocoded
+        };
+        const res = await fetch(`${backendUrl}/api/requests`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error('Failed to request ride');
+        setSuccess("Ride requested successfully!");
+      } else if (role === "driver") {
+        // POST /api/rides
+        const body = {
+          driverId: userId,
+          origin: typeof pickup === 'object' ? pickup : location, // fallback to current location if not geocoded
+          destination: typeof dropoff === 'object' ? dropoff : location, // fallback to current location if not geocoded
+        };
+        const res = await fetch(`${backendUrl}/api/rides`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error('Failed to create drive');
+        setSuccess("Drive created successfully!");
+      }
+    } catch (err: any) {
+      setFormError("Failed to submit. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ width: "100vw", height: "100vh", margin: 0, padding: 0, position: "fixed", top: 0, left: 0 }}>
+      <div ref={mapRef} style={{ width: "100vw", height: "100vh" }} />
+      <ScriptLoader />
+      {error && <div style={{position:'absolute',top:10,left:10,background:'#fff',padding:8,borderRadius:4,color:'red',zIndex:1000}}>{error}</div>}
+      <SocketStatusCard status={socketStatus} userId={userId ?? undefined} details={socketDetails} />
+      {/* Ride/Drive Card */}
+      <div className="absolute bottom-0 left-0 right-0 w-full px-4 pb-4 z-40">
+        <Card className="shadow-2xl">
+          <CardHeader>
+            <CardTitle>{role === "driver" ? "Create a Drive" : "Find a Ride"}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="pickup">Pickup Location</Label>
+                <div className="flex">
+                  <Input
+                    id="pickup"
+                    ref={pickupRef}
+                    placeholder="Enter pickup location"
+                    required
+                    value={pickup}
+                    onChange={e => setPickup(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dropoff">Drop-off Location</Label>
+                <div className="flex">
+                  <Input
+                    id="dropoff"
+                    ref={dropoffRef}
+                    placeholder="Enter drop-off location"
+                    required
+                    value={dropoff}
+                    onChange={e => setDropoff(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Date and Time</Label>
+                <div className="flex space-x-2">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-[180px] justify-start text-left font-normal">
+                        {date ? date.toLocaleDateString() : <span>Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
+                    </PopoverContent>
+                  </Popover>
+                  <TimePicker
+                    value={time}
+                    onChange={setTime}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+              {formError && <div className="text-red-500 text-sm">{formError}</div>}
+              {success && <div className="text-green-600 text-sm">{success}</div>}
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? (role === "driver" ? "Creating..." : "Finding...") : (role === "driver" ? "Create Drive" : "Find Ride")}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function ScriptLoader() {
+  useEffect(() => {
+    if (typeof window !== "undefined" && !(window as any).google) {
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`;
+      script.async = true;
+      document.body.appendChild(script);
+      return () => {
+        document.body.removeChild(script);
+      };
+    }
+  }, []);
+  return null;
+}
+</file>
+
+<file path="src/app/available-drivers/availableDriversPage.tsx">
+"use client"
+/// <reference types="google.maps" />
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
+
+import { useState, useEffect, useRef } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { StarIcon, DollarSignIcon } from "lucide-react"
+
+declare global {
+  interface Window {
+    google: typeof google
+  }
+}
+
+interface Driver {
+  id: string
+  name: string
+  rating: number
+  fare: number
+}
+
+export default function AvailableDriversPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [drivers, setDrivers] = useState<Driver[]>([])
+  const mapRef = useRef<HTMLDivElement>(null)
+  const [map, setMap] = useState<google.maps.Map | null>(null)
+  const [directionsRenderer, setDirectionsRenderer] = useState<google.maps.DirectionsRenderer | null>(null)
+
+  const pickup = searchParams.get("pickup")
+  const dropoff = searchParams.get("dropoff")
+  const date = searchParams.get("date")
+  const time = searchParams.get("time")
+
+  // Initialize map and directions
+  useEffect(() => {
+    const script = document.createElement('script')
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`
+    script.async = true
+    script.defer = true
+    document.head.appendChild(script)
+
+    script.onload = () => {
+      if (mapRef.current) {
+        // Initialize map centered on Boston
+        const mapInstance = new google.maps.Map(mapRef.current, {
+          center: { lat: 42.3601, lng: -71.0589 },
+          zoom: 12,
+        })
+        setMap(mapInstance)
+
+        // Initialize DirectionsRenderer
+        const rendererInstance = new google.maps.DirectionsRenderer({
+          map: mapInstance,
+          suppressMarkers: false,
+        })
+        setDirectionsRenderer(rendererInstance)
+      }
+    }
+
+    return () => {
+      document.head.removeChild(script)
+    }
+  }, [])
+
+  // Calculate and display route when pickup and dropoff are available
+  useEffect(() => {
+    if (map && directionsRenderer && pickup && dropoff) {
+      const directionsService = new google.maps.DirectionsService()
+
+      directionsService.route(
+        {
+          origin: pickup,
+          destination: dropoff,
+          travelMode: google.maps.TravelMode.DRIVING,
+        },
+        (result, status) => {
+          if (status === google.maps.DirectionsStatus.OK && result) {
+            directionsRenderer.setDirections(result)
+            
+            // Fit map bounds to show the entire route
+            const bounds = new google.maps.LatLngBounds()
+            result.routes[0].legs.forEach((leg) => {
+              bounds.extend(leg.start_location)
+              bounds.extend(leg.end_location)
+            })
+            map.fitBounds(bounds)
+          }
+        }
+      )
+    }
+  }, [map, directionsRenderer, pickup, dropoff])
+
+  useEffect(() => {
+    // Mock drivers data
+    setDrivers([
+      { id: "1", name: "John Doe", rating: 4.8, fare: 15.5 },
+      { id: "2", name: "Jane Smith", rating: 4.6, fare: 14.75 },
+      { id: "3", name: "Bob Johnson", rating: 4.9, fare: 16.25 },
+      { id: "4", name: "Alice Brown", rating: 4.7, fare: 15.0 },
+      { id: "5", name: "Charlie Davis", rating: 4.5, fare: 14.5 },
+    ])
+  }, [])
+
+  const handleDriverClick = (driverId: string) => {
+    router.push(`/driver-details/${driverId}`)
+  }
+
+// ... existing code ...
+return (
+  <div className="h-screen w-screen relative overflow-hidden">
+    {/* Map Container */}
+    <div ref={mapRef} className="absolute inset-0 w-full h-full" />
+
+    {/* Content overlay - Modified positioning and height */}
+    <div className="absolute bottom-0 left-0 right-0 h-[30vh] transition-transform">
+      {/* Draggable handle */}
+      <div className="bg-white/95 backdrop-blur rounded-t-xl p-2 flex justify-center">
+        <div className="w-12 h-1 bg-gray-300 rounded-full" />
+      </div>
+
+      {/* Scrollable content */}
+      <div className="bg-white/95 backdrop-blur h-full overflow-y-auto px-4 pb-4">
+        <Card className="w-full max-w-3xl mx-auto mb-4 border-none bg-transparent">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold">Ride Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p><strong>Pickup:</strong> {pickup}</p>
+            <p><strong>Drop-off:</strong> {dropoff}</p>
+            <p><strong>Date:</strong> {date ? new Date(date).toLocaleDateString() : "Not specified"}</p>
+            <p><strong>Time:</strong> {time}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="w-full max-w-3xl mx-auto border-none bg-transparent">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold">Available Drivers</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {drivers.map((driver) => (
+                <Card
+                  key={driver.id}
+                  className="cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => handleDriverClick(driver.id)}
+                >
+                  <CardContent className="flex justify-between items-center p-4">
+                    <div>
+                      <h3 className="text-lg font-semibold">{driver.name}</h3>
+                      <div className="flex items-center mt-1">
+                        <StarIcon className="h-4 w-4 mr-1 text-yellow-400" />
+                        <span>{driver.rating.toFixed(1)}</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="flex items-center justify-end mt-1">
+                        <DollarSignIcon className="h-4 w-4 mr-1" />
+                        <span>${driver.fare.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-center mt-4 mb-4">
+          <Button 
+            className="bg-white" 
+            onClick={() => router.push("/home")}
+          >
+            Back to Home
+          </Button>
+        </div>
+      </div>
+    </div>
+  </div>
+)
+}
+</file>
+
+<file path="src/app/page.tsx">
+"use client"
+
+import { useState } from "react"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { useRouter } from "next/navigation"
+
+export default function WelcomeSignup() {
+  const [role, setRole] = useState<"rider" | "driver" | null>(null);
+  const [displayName, setDisplayName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  function generateUserId() {
+    return "u" + Math.floor(1000 + Math.random() * 9000);
+  }
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!role || !displayName.trim()) {
+      setError("Please select a role and enter your display name.");
+      return;
+    }
+    setLoading(true);
+    const userId = generateUserId();
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, displayName, role })
+      });
+      if (!res.ok) throw new Error("Registration failed");
+      // Open socket connection and store user data
+      if (typeof window !== "undefined") {
+        const { createSocket } = await import("@/utils/socket");
+        createSocket(userId, role);
+        localStorage.setItem("userId", userId);
+        localStorage.setItem("role", role);
+        localStorage.setItem("displayName", displayName);
+        window.location.href = "/map";
+      }
+    } catch (err: any) {
+      setError(err.message || "Registration error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <Card className="w-[350px]">
+        <CardHeader>
+          <CardTitle>Welcome to Hitchiked, do you want to</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form className="space-y-4" onSubmit={handleRegister}>
+            <div className="flex gap-4 mb-2">
+              <Button
+                type="button"
+                variant={role === "rider" ? "default" : "outline"}
+                onClick={() => setRole("rider")}
+                className="flex-1"
+              >
+                ride today
+              </Button>
+              <Button
+                type="button"
+                variant={role === "driver" ? "default" : "outline"}
+                onClick={() => setRole("driver")}
+                className="flex-1"
+              >
+                drive today
+              </Button>
+            </div>
+            <Label htmlFor="displayName">Display Name</Label>
+            <Input
+              id="displayName"
+              value={displayName}
+              onChange={e => setDisplayName(e.target.value)}
+              placeholder="Enter your name"
+              required
+            />
+            {error && <div className="text-red-500 text-sm">{error}</div>}
+            {success && <div className="text-green-600 text-sm">Registered successfully!</div>}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Registering..." : "Continue"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+</file>
+
+</files>
