@@ -20,7 +20,7 @@ interface MarkerWithId {
 
 export default function MapPage() {
   // Socket status state
-  const [socketStatus, setSocketStatus] = useState<"connected" | "connecting" | "disconnected">("connecting");
+  const [socketStatus, setSocketStatus] = useState<"connected" | "connecting" | "disconnected">("disconnected");
   const [socketDetails, setSocketDetails] = useState<string>("");
   const mapRef = useRef<HTMLDivElement | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -38,129 +38,239 @@ export default function MapPage() {
   const userId = typeof window !== 'undefined' ? localStorage.getItem("userId") : null;
   const role = typeof window !== 'undefined' ? localStorage.getItem("role") as "driver" | "rider" : null;
 
+useEffect(() => {
+  let watchId: number | undefined;
+  if (navigator.geolocation) {
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (err) => setError("Could not get location: " + err.message),
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+    );
+  } else {
+    setError("Geolocation not supported");
+  }
+  return () => { if (watchId !== undefined) navigator.geolocation.clearWatch(watchId); };
+}, []);
+
   // Get live location
-  useEffect(() => {
-    let watchId: number;
-    if (navigator.geolocation) {
-      watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        },
-        (err) => setError("Could not get location: " + err.message),
-        { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
-      );
-    } else {
-      setError("Geolocation not supported");
-    }
-    return () => {
-      if (navigator.geolocation && watchId !== undefined) {
-        navigator.geolocation.clearWatch(watchId);
-      }
-    };
-  }, []);
+  // useEffect(() => {
+  //   let watchId: number;
+  //   if (navigator.geolocation) {
+  //     watchId = navigator.geolocation.watchPosition(
+  //       (pos) => {
+  //         setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+  //       },
+  //       (err) => setError("Could not get location: " + err.message),
+  //       { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+  //     );
+  //   } else {
+  //     setError("Geolocation not supported");
+  //   }
+  //   return () => {
+  //     if (navigator.geolocation && watchId !== undefined) {
+  //       navigator.geolocation.clearWatch(watchId);
+  //     }
+  //   };
+  // }, []);
 
-  // Initialize socket and map
   useEffect(() => {
-    if (!location || !userId || !role || !mapRef.current || typeof window === "undefined" || !window.google || !window.google.maps) return;
-
-    // Setup map
+    if (!mapRef.current || !('google' in window) || !location) return;
     if (!mapInstance.current) {
-      mapInstance.current = new window.google.maps.Map(mapRef.current, {
-        center: location,
-        zoom: 15,
-      });
-    } else {
-      mapInstance.current.setCenter(location);
-    }
-
-    // Place/update self marker
-    if (!myMarker.current) {
-      myMarker.current = new window.google.maps.Marker({
+      mapInstance.current = new google.maps.Map(mapRef.current, { center: location, zoom: 15 });
+      myMarker.current = new google.maps.Marker({
         position: location,
         map: mapInstance.current,
         title: "You are here",
-        icon: {
-          url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
-        },
+        icon: { url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png" },
       });
-    } else {
-      myMarker.current.setPosition(location);
     }
+  }, [location]);
 
-    // Setup socket connection
-    if (!socketRef.current) {
-      const socket = createSocket(userId, role);
-      socketRef.current = socket;
+  useEffect(() => {
+    if (!userId || !role) {
+      setSocketStatus("disconnected");
+      setSocketDetails("Missing user session (userId/role).");
+      return;
+    }
+    if (socketRef.current) return;
+  
+    setSocketStatus("connecting");
+    setSocketDetails("Connecting to server...");
+    const s = createSocket(userId, role);
+    socketRef.current = s;
+  
+    s.on("connect", () => {
+      setSocketStatus("connected");
+      setSocketDetails(`Socket ID: ${s.id}`);
+      if (location) registerUser(s, userId, role, location.lat, location.lng);
+    });
+    s.on("disconnect", (reason: string) => {
+      setSocketStatus("disconnected");
+      setSocketDetails(reason ? `Disconnected: ${reason}` : "Disconnected");
+    });
+    s.on("connect_error", () => {
+      setSocketStatus("disconnected");
+      setSocketDetails("Connection error");
+    });
+    s.on("reconnect_attempt", () => {
       setSocketStatus("connecting");
-      setSocketDetails("Connecting to server...");
-      // Register user on connect
-      socket.on("connect", () => {
-        setSocketStatus("connected");
-        setSocketDetails(`Socket ID: ${socket.id}`);
-        registerUser(socket, userId, role, location.lat, location.lng);
+      setSocketDetails("Reconnecting.");
+    });
+    s.on("user:location", (data: UserLocation) => {
+      setOtherUsers((prev) => {
+        const filtered = prev.filter((u) => u.userId !== data.userId);
+        return [...filtered, data];
       });
-      socket.on("disconnect", (reason: string) => {
-        setSocketStatus("disconnected");
-        setSocketDetails(reason ? `Disconnected: ${reason}` : "Disconnected");
-      });
-      socket.on("connect_error", (err: any) => {
-        setSocketStatus("disconnected");
-        setSocketDetails("Connection error");
-      });
-      socket.on("reconnect_attempt", () => {
-        setSocketStatus("connecting");
-        setSocketDetails("Reconnecting...");
-      });
-      // Listen for other users' locations
-      socket.on("user:location", (data: UserLocation) => {
-        setOtherUsers((prev) => {
-          // Replace or add user
-          const filtered = prev.filter(u => u.userId !== data.userId);
-          return [...filtered, data];
-        });
-      });
-    } else {
-      // If already connected, send register again (for location update)
-      registerUser(socketRef.current, userId, role, location.lat, location.lng);
-    }
+    });
+  
+    return () => { s.disconnect(); };  // only on unmount
+  }, [userId, role, location]);
 
-    // Emit own location update
-    if (socketRef.current) {
-      emitLocationUpdate(socketRef.current, location.lat, location.lng);
+  useEffect(() => {
+    if (!location) return;
+    if (mapInstance.current) mapInstance.current.setCenter(location);
+    if (myMarker.current) myMarker.current.setPosition(location);
+    if (socketRef.current) emitLocationUpdate(socketRef.current, location.lat, location.lng);
+    if (userId) {
+      fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/me/location`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-user-id": userId },
+        body: JSON.stringify({ lat: location.lat, lng: location.lng }),
+      }).catch(() => {});
     }
+  }, [location, userId]);
 
-    // Render other users' markers
+  useEffect(() => {
+    if (!mapInstance.current) return;
+    // clear old
     otherMarkers.current.forEach(({ marker }) => marker.setMap(null));
-    otherMarkers.current = otherUsers.map((u) => {
-      // Don't show yourself
-      if (u.userId === userId) return null;
-      const marker = new window.google.maps.Marker({
+    otherMarkers.current = [];
+    // add new
+    for (const u of otherUsers) {
+      if (!u || u.userId === userId) continue;
+      const marker = new google.maps.Marker({
         position: { lat: u.lat, lng: u.lng },
-        map: mapInstance.current!,
-        icon: {
-          url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
-        },
+        map: mapInstance.current,
+        icon: { url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png" },
         title: `User: ${u.userId}`,
       });
-      return { marker, userId: u.userId };
-    }).filter(Boolean) as MarkerWithId[];
+      otherMarkers.current.push({ marker, userId: u.userId });
+    }
+  }, [otherUsers, userId]);
+  
 
-    // Cleanup on unmount
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-      otherMarkers.current.forEach(({ marker }) => marker.setMap(null));
-      if (myMarker.current) myMarker.current.setMap(null);
-      mapInstance.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location, userId, role, otherUsers.length]);
+  // // Initialize socket and map
+  // useEffect(() => {
+  //   if (!location || !userId || !role || !mapRef.current || typeof window === "undefined" || !window.google || !window.google.maps) return;
+
+  //   // Setup map
+  //   if (!mapInstance.current) {
+  //     mapInstance.current = new window.google.maps.Map(mapRef.current, {
+  //       center: location,
+  //       zoom: 15,
+  //     });
+  //   } else {
+  //     mapInstance.current.setCenter(location);
+  //   }
+
+  //   // Place/update self marker
+  //   if (!myMarker.current) {
+  //     myMarker.current = new window.google.maps.Marker({
+  //       position: location,
+  //       map: mapInstance.current,
+  //       title: "You are here",
+  //       icon: {
+  //         url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+  //       },
+  //     });
+  //   } else {
+  //     myMarker.current.setPosition(location);
+  //   }
+
+  //   // Setup socket connection
+  //   if (!socketRef.current) {
+  //     const socket = createSocket(userId, role);
+  //     socketRef.current = socket;
+  //     setSocketStatus("connecting");
+  //     setSocketDetails("Connecting to server...");
+  //     // Register user on connect
+  //     socket.on("connect", () => {
+  //       setSocketStatus("connected");
+  //       setSocketDetails(`Socket ID: ${socket.id}`);
+  //       registerUser(socket, userId, role, location.lat, location.lng);
+  //     });
+  //     socket.on("disconnect", (reason: string) => {
+  //       setSocketStatus("disconnected");
+  //       setSocketDetails(reason ? `Disconnected: ${reason}` : "Disconnected");
+  //     });
+  //     socket.on("connect_error", (err: any) => {
+  //       setSocketStatus("disconnected");
+  //       setSocketDetails("Connection error");
+  //     });
+  //     socket.on("reconnect_attempt", () => {
+  //       setSocketStatus("connecting");
+  //       setSocketDetails("Reconnecting...");
+  //     });
+  //     // Listen for other users' locations
+  //     socket.on("user:location", (data: UserLocation) => {
+  //       setOtherUsers((prev) => {
+  //         // Replace or add user
+  //         const filtered = prev.filter(u => u.userId !== data.userId);
+  //         return [...filtered, data];
+  //       });
+  //     });
+  //   } else {
+  //     // If already connected, send register again (for location update)
+  //     registerUser(socketRef.current, userId, role, location.lat, location.lng);
+  //   }
+
+  //   // Emit own location update
+  //   if (socketRef.current) {
+  //     emitLocationUpdate(socketRef.current, location.lat, location.lng);
+  //   }
+  //   fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/me/location`, {
+  //     method: "POST",
+  //     headers: {
+  //       "Content-Type": "application/json",
+  //       "x-user-id": userId!,
+  //     },
+  //     body: JSON.stringify({ lat: location.lat, lng: location.lng }),
+  //   }).catch(() => {});
+
+  //   // Render other users' markers
+  //   otherMarkers.current.forEach(({ marker }) => marker.setMap(null));
+  //   otherMarkers.current = otherUsers.map((u) => {
+  //     // Don't show yourself
+  //     if (u.userId === userId) return null;
+  //     const marker = new window.google.maps.Marker({
+  //       position: { lat: u.lat, lng: u.lng },
+  //       map: mapInstance.current!,
+  //       icon: {
+  //         url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
+  //       },
+  //       title: `User: ${u.userId}`,
+  //     });
+  //     return { marker, userId: u.userId };
+  //   }).filter(Boolean) as MarkerWithId[];
+
+  //   // Cleanup on unmount
+  //   return () => {
+  //     if (socketRef.current) {
+  //       socketRef.current.disconnect();
+  //       socketRef.current = null;
+  //     }
+  //     otherMarkers.current.forEach(({ marker }) => marker.setMap(null));
+  //     if (myMarker.current) myMarker.current.setMap(null);
+  //     mapInstance.current = null;
+  //   };
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, [location, userId, role, otherUsers.length]);
 
   // Form state for ride/drive card
-  const [pickup, setPickup] = useState("");
-  const [dropoff, setDropoff] = useState("");
+  const [pickupAddr, setPickupAddr] = useState("");
+  const [dropoffAddr, setDropoffAddr] = useState("");
+  const [pickupLL, setPickupLL] = useState<{lat:number; lng:number} | null>(null);
+  const [dropoffLL, setDropoffLL] = useState<{lat:number; lng:number} | null>(null);
   const [date, setDate] = useState<Date | undefined>();
   const [time, setTime] = useState("");
   const [loading, setLoading] = useState(false);
@@ -222,18 +332,21 @@ export default function MapPage() {
             fields: ["formatted_address", "geometry"],
             types: ["address"]
           })
-  
-          // Handle place selection for pickup
+
           pickupAutocomplete.addListener("place_changed", () => {
-            const place = pickupAutocomplete.getPlace()
-            setPickup(place.formatted_address || "")
-          })
-  
-          // Handle place selection for dropoff
+            const place = pickupAutocomplete.getPlace();
+            setPickupAddr(place.formatted_address || "");
+            const loc = place.geometry?.location;
+            if (loc) setPickupLL({ lat: loc.lat(), lng: loc.lng() });
+          });
+          
           dropoffAutocomplete.addListener("place_changed", () => {
-            const place = dropoffAutocomplete.getPlace()
-            setDropoff(place.formatted_address || "")
-          })
+            const place = dropoffAutocomplete.getPlace();
+            setDropoffAddr(place.formatted_address || "");
+            const loc = place.geometry?.location;
+            if (loc) setDropoffLL({ lat: loc.lat(), lng: loc.lng() });
+          });
+          
         }
       }
   
@@ -243,64 +356,54 @@ export default function MapPage() {
     }, [])
 
   // Handlers for booking
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setFormError("");
-    setSuccess("");
-    if (!pickup || !dropoff || !date || !time) {
-      setFormError("All fields are required.");
-      return;
-    }
-    setLoading(true);
-    try {
-      // TODO: Geocode pickup/dropoff to lat/lng if needed. For now, assume pickup/dropoff are lat/lng objects.
-      // If pickup/dropoff are strings, you must call a geocoding API here.
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      if (!backendUrl) {
-        setFormError("Backend URL is not configured.");
-        setLoading(false);
-        return;
-      }
-      if (!location) {
-        setFormError("Current location not available.");
-        setLoading(false);
-        return;
-      }
-      if (role === "rider") {
-        // POST /api/requests
-        const body = {
-          riderId: userId,
-          origin: typeof pickup === 'object' ? pickup : location, // fallback to current location if not geocoded
-          destination: typeof dropoff === 'object' ? dropoff : location, // fallback to current location if not geocoded
-        };
-        const res = await fetch(`${backendUrl}/api/requests`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) throw new Error('Failed to request ride');
-        setSuccess("Ride requested successfully!");
-      } else if (role === "driver") {
-        // POST /api/rides
-        const body = {
-          driverId: userId,
-          origin: typeof pickup === 'object' ? pickup : location, // fallback to current location if not geocoded
-          destination: typeof dropoff === 'object' ? dropoff : location, // fallback to current location if not geocoded
-        };
-        const res = await fetch(`${backendUrl}/api/rides`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) throw new Error('Failed to create drive');
-        setSuccess("Drive created successfully!");
-      }
-    } catch (err: any) {
-      setFormError("Failed to submit. Try again.");
-    } finally {
-      setLoading(false);
-    }
+async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault();
+  setFormError("");
+  setSuccess("");
+  if (!pickupAddr || !dropoffAddr || !date || !time) {
+    setFormError("All fields are required.");
+    return;
   }
+  if (!userId) {
+    setFormError("Missing user session.");
+    return;
+  }
+
+  setLoading(true);
+  try {
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+    if (!backendUrl) throw new Error("Backend URL not configured.");
+
+    // fallback to current location if no geometry was returned
+    const pickup = pickupLL ?? location;
+    const dropoff = dropoffLL ?? location;
+    if (!pickup || !dropoff) throw new Error("Could not resolve pickup/dropoff.");
+
+    if (role !== "driver") {  // default to rider flow
+      const body = {
+        pickup: { lat: pickup.lat, lng: pickup.lng, address: pickupAddr },
+        dropoff: { lat: dropoff.lat, lng: dropoff.lng, address: dropoffAddr },
+      };
+      const res = await fetch(`${backendUrl}/api/requests`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": userId,
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Failed to request ride");
+      setSuccess("Ride requested successfully!");
+    } else {
+      setFormError("Driver publishing is not wired to backend yet.");
+    }
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+    setFormError(errorMessage);
+  } finally {
+    setLoading(false);
+  }
+}
 
   return (
     <div style={{ width: "100vw", height: "100vh", margin: 0, padding: 0, position: "fixed", top: 0, left: 0 }}>
@@ -324,8 +427,8 @@ export default function MapPage() {
                     ref={pickupRef}
                     placeholder="Enter pickup location"
                     required
-                    value={pickup}
-                    onChange={e => setPickup(e.target.value)}
+                    value={pickupAddr}
+                    onChange={e => setPickupAddr(e.target.value)}
                   />
                 </div>
               </div>
@@ -337,8 +440,8 @@ export default function MapPage() {
                     ref={dropoffRef}
                     placeholder="Enter drop-off location"
                     required
-                    value={dropoff}
-                    onChange={e => setDropoff(e.target.value)}
+                    value={dropoffAddr}
+                    onChange={e => setDropoffAddr(e.target.value)}
                   />
                 </div>
               </div>
@@ -377,14 +480,12 @@ export default function MapPage() {
 
 function ScriptLoader() {
   useEffect(() => {
-    if (typeof window !== "undefined" && !(window as any).google) {
+    if (typeof window !== "undefined" && !('google' in window)) {
       const script = document.createElement("script");
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`;
       script.async = true;
       document.body.appendChild(script);
-      return () => {
-        document.body.removeChild(script);
-      };
+      return () => { document.body.removeChild(script); };
     }
   }, []);
   return null;

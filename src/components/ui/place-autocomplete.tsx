@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { GooglePlacesSuggestion } from "@/types";
 
 export interface PlaceAutocompleteProps {
   value: string;
@@ -20,8 +21,7 @@ export const PlaceAutocomplete: React.FC<PlaceAutocompleteProps> = ({
   disabled,
   className,
 }) => {
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<GooglePlacesSuggestion[]>([]);
   const [active, setActive] = useState(-1);
   const controller = useRef<AbortController | null>(null);
 
@@ -30,7 +30,6 @@ export const PlaceAutocomplete: React.FC<PlaceAutocompleteProps> = ({
       setSuggestions([]);
       return;
     }
-    setLoading(true);
     if (controller.current) controller.current.abort();
     controller.current = new AbortController();
     const fetchSuggestions = async () => {
@@ -43,17 +42,16 @@ export const PlaceAutocomplete: React.FC<PlaceAutocompleteProps> = ({
         );
         const data = await res.json();
         setSuggestions(data.predictions || []);
-      } catch (e) {
+      } catch (error) {
+        console.error("Error fetching suggestions:", error);
         setSuggestions([]);
-      } finally {
-        setLoading(false);
       }
     };
     fetchSuggestions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  const handleSelect = async (suggestion: any) => {
+  const handleSelect = async (suggestion: GooglePlacesSuggestion) => {
     onSelect(suggestion);
     setSuggestions([]);
   };

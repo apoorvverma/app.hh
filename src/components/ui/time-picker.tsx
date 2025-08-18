@@ -19,10 +19,10 @@ export const TimePicker = React.forwardRef<HTMLDivElement, TimePickerProps>(
     const [minute, setMinute] = React.useState<string>(value.split(":")[1] || "");
 
     React.useEffect(() => {
-      if (hour && minute) {
-        onChange && onChange(`${hour}:${minute}`);
+      if (hour && minute && onChange) {
+        onChange(`${hour}:${minute}`);
       }
-    }, [hour, minute]);
+    }, [hour, minute, onChange]);
 
     React.useEffect(() => {
       if (value) {
