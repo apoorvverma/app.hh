@@ -1,6 +1,5 @@
 "use client"
 /// <reference types="google.maps" />
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 
 import { useState, useEffect, useRef } from "react"
