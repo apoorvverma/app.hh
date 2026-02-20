@@ -1,8 +1,8 @@
 import { io, Socket } from "socket.io-client";
+import { SOCKET_BASE_URL } from "@/lib/config";
 
 export function createSocket(userId: string, role: "rider" | "driver"): Socket {
-  const url = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4000";
-  return io(url, {
+  return io(SOCKET_BASE_URL, {
     transports: ["websocket", "polling"],
     autoConnect: true,
     reconnection: true,

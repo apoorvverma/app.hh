@@ -1,57 +1,96 @@
-"use client"
+"use client";
 
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { StarIcon, MapPinIcon } from "lucide-react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { listMyRides, Ride, updateRideStatus } from "@/lib/api";
+
+type Role = "driver" | "rider";
 
 export default function RideHistoryPage() {
-  const router = useRouter()
-  const rides = [
-    { id: 1, driver: "Alice Smith", pickup: "123 Main St", dropoff: "456 Elm St", fare: "$15.50", rating: 5 },
-    { id: 2, driver: "Bob Johnson", pickup: "789 Oak Ave", dropoff: "321 Pine Rd", fare: "$22.75", rating: 4 },
-    { id: 3, driver: "Carol Williams", pickup: "159 Maple Ln", dropoff: "753 Birch Blvd", fare: "$18.00", rating: 5 },
-  ]
+  const router = useRouter();
+  const [rides, setRides] = useState<Ride[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const role = (typeof window !== "undefined" ? localStorage.getItem("role") : "rider") as Role;
+
+  async function load() {
+    try {
+      setLoading(true);
+      setError("");
+      const items = await listMyRides(role || "rider");
+      setRides(items || []);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed to load rides";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function changeStatus(rideId: string, next: "IN_PROGRESS" | "COMPLETED" | "CANCELLED") {
+    try {
+      await updateRideStatus(rideId, next);
+      await load();
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed to update ride status";
+      setError(message);
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
+    <div className="min-h-screen bg-gray-100 p-8 pb-28">
       <Card className="max-w-3xl mx-auto">
         <CardHeader>
           <CardTitle className="text-2xl font-bold">Ride History</CardTitle>
         </CardHeader>
         <CardContent>
+          {loading && <div>Loading rides...</div>}
+          {error && <div className="text-red-600 text-sm mb-3">{error}</div>}
+          {!loading && rides.length === 0 && <div>No rides yet.</div>}
+
           <div className="space-y-4">
             {rides.map((ride) => (
               <div key={ride.id} className="bg-white p-4 rounded shadow space-y-2">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-semibold">{ride.driver}</h3>
-                  <span className="text-green-600 font-semibold">{ride.fare}</span>
+                  <h3 className="font-semibold">Ride #{ride.id}</h3>
+                  <span className="font-semibold">{ride.status || "UNKNOWN"}</span>
                 </div>
-                <div className="flex items-center text-gray-500">
-                  <MapPinIcon className="h-4 w-4 mr-1" />
-                  <span className="text-sm">From: {ride.pickup}</span>
-                </div>
-                <div className="flex items-center text-gray-500">
-                  <MapPinIcon className="h-4 w-4 mr-1" />
-                  <span className="text-sm">To: {ride.dropoff}</span>
-                </div>
-                <div className="flex items-center">
-                  <span className="text-yellow-500 mr-1">
-                    {Array.from({ length: ride.rating }).map((_, index) => (
-                      <StarIcon key={index} className="h-4 w-4 inline" />
-                    ))}
-                  </span>
-                  <span className="ml-1">{ride.rating}/5</span>
-                </div>
+                <div className="text-sm text-gray-600">From: {ride.origin?.address || "N/A"}</div>
+                <div className="text-sm text-gray-600">To: {ride.destination?.address || "N/A"}</div>
+                <div className="text-sm text-gray-600">Driver: {ride.driverId || "-"} | Rider: {ride.riderId || "-"}</div>
+
+                {role === "driver" && (
+                  <div className="flex gap-2 pt-2">
+                    <Button size="sm" variant="outline" onClick={() => changeStatus(ride.id, "IN_PROGRESS")}>
+                      Start
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => changeStatus(ride.id, "COMPLETED")}>
+                      Complete
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => changeStatus(ride.id, "CANCELLED")}>
+                      Cancel
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </CardContent>
       </Card>
+
       <Button className="mt-4" onClick={() => router.push("/home")}>
         Back to Home
       </Button>
+
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
         <Dialog>
           <DialogTrigger asChild>
@@ -60,9 +99,7 @@ export default function RideHistoryPage() {
             </Button>
           </DialogTrigger>
           <DialogContent>
-            {/* <DialogHeader> */}
-              <DialogTitle>How can we help you?</DialogTitle>
-            {/* </DialogHeader> */}
+            <DialogTitle>How can we help you?</DialogTitle>
             <div className="space-y-4">
               <Button onClick={() => router.push("/chatbot?issue=safety")} className="w-full">
                 Report Safety Issues
@@ -96,6 +133,5 @@ export default function RideHistoryPage() {
         </Dialog>
       </div>
     </div>
-  )
+  );
 }
-

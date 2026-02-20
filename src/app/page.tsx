@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { login } from "@/lib/api"
 
 export default function WelcomeSignup() {
   const [role, setRole] = useState<"rider" | "driver" | null>(null);
@@ -22,26 +23,12 @@ export default function WelcomeSignup() {
     setLoading(true);
     // const userId = generateUserId();
     try {
-      // const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/register`, {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName, role })
-      });
-      if (!res.ok) throw new Error("Registration failed");
-      // Open socket connection and store user data
+      const { userId } = await login(displayName, role);
       if (typeof window !== "undefined") {
-        // const { createSocket } = await import("@/utils/socket");
-        const { userId } = await res.json();  // ← use server id
-        
-        // createSocket(userId, role);
-
-        if (typeof window !== "undefined") {
-          localStorage.setItem("userId", userId);
-          localStorage.setItem("role", role);
-          localStorage.setItem("displayName", displayName);
-          window.location.href = "/map";       // socket connects on map page
-        }
+        localStorage.setItem("userId", userId);
+        localStorage.setItem("role", role);
+        localStorage.setItem("displayName", displayName);
+        window.location.href = "/map";
       }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
